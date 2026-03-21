@@ -43,22 +43,17 @@ syscall
 rand_column:
 addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)              # push $ra to the stack for nested function
-
-add $t2, $s0, 272           # add the horizontal - column 5 (4 x 4) and vertical - row 3 (128 x 2) offest to $s0
-
-# randomly generate an integer for one of the six colors
-li $v0, 42
-li $a0, 0
-li $a1, 6                   # 0 to 6 exclusive
-syscall                     # random integer stored in $a0
-
-sll $t3, $a0, 2             # multiply index by 4 (word size)
-add $t3, $t3, $s1           # address = address of first color + offset
-lw $t4, 0($t3)              # load color into $t4
-sw $t4, 0($t2)              # draw pixel of color $t4 to location $t2
-
+addi $t2, $s0, 272          # add the horizontal - column 5 (4 x 4) and vertical - row 3 (128 x 2) offest to $s0
+addi $t4, $t2, 384           # calculate the postion of the last pixel in the column
+rand_column_loop:
+jal rand_color              # call rand_color to get a random color in $v0
+beq $t4, $t2, rand_column_loop_end # check if the current position is the end of the column, if so branch out of the loop
+sw $v0, 0($t2)              # draw pixel of color $v0 to location $t2
+addi $t2, $t2, 128          # Move to the next pixel in the column
+j rand_column_loop          # Jump to the start of the loop
+rand_column_loop_end:
 lw $ra, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+addi $sp, $sp, 4          # move stack pointer back to the top of the stack
 jr $ra
 # draw the pixel
 # move to the next row
@@ -67,6 +62,18 @@ jr $ra
 # move to the next row
 # randomly generate an integer for one of the six colors
 # draw the pixel
+
+rand_color:
+# randomly generate an integer for one of the six colors
+li $v0, 42
+li $a0, 0                   # random integer gets stored in $a0
+li $a1, 6                   # 0 to 6 exclusive
+syscall                     # random integer stored in $a0
+
+sll $t3, $a0, 2             # multiply index by 4 (word size)
+add $t3, $t3, $s1           # color address = address of first color + offset
+lw $v0, 0($t3)              # load color into return value $v0
+jr $ra
 ##############################################################################
 # Code for drawing a rectangle
 ##############################################################################
