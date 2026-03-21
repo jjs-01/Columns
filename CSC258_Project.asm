@@ -1,6 +1,7 @@
 .data
 ADDR_DSPL: .word 0x10008000
 colors: .word 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xf28c28, 0xff00ff, 0xffffff   # red, green, blue, yellow, orange, magenta, white
+keyboardaddress: .word 0xffff0000
 
 ######################## Bitmap Display Configuration ########################
 # - Unit width in pixels: 8
@@ -10,8 +11,12 @@ colors: .word 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xf28c28, 0xff00ff, 0xffff
 # - Base Address for Display: 0x10008000 ($gp)
 ##############################################################################
 .text
-lw $s0, ADDR_DSPL       # $s0 = base address for display
-la $s1, colors          # $s1 = address for the first color
+lw $s0, ADDR_DSPL           # $s0 = base address for display
+la $s1, colors              # $s1 = address for the first color
+lw $s2, keyboardaddress     # $s2 = address for the keyboard
+
+lw $t8, 0($s2)              # load first word from keyboard
+beq $t8, 1, keyboard_input  # if first word 1 key is pressed
 
 # initialize the drawing of white game area rectangle
 addi $a0, $zero, 1          # set the X coordinate
@@ -21,7 +26,7 @@ addi $a3, $zero, 16         # set the height of the rectangle (14 + 2)
 lw $t9, 24($s1)             # loads white from colors
 jal rect_draw               # calls rectangle drawing function.
 
-# initialize the drawing of white game area rectangle
+# initialize the drawing of black game area rectangle
 addi $a0, $zero, 2          # set the X coordinate
 addi $a1, $zero, 2          # set the Y coordinate
 addi $a2, $zero, 6          # set the width of the rectangle (6)
@@ -29,8 +34,55 @@ addi $a3, $zero, 14         # set the height of the rectangle (14)
 add $t9, $zero, $zero       # set the colour of the rectangle to be black
 jal rect_draw               # calls rectangle drawing function.
 
+# initialize the drawing of the column
 jal rand_column
-li $v0, 10                  # terminate the program gracefully (number correspods to the type of syscall)
+li $v0, 10                  # terminate the program gracefully
+syscall
+
+##############################################################################
+# Code for responding to keyboard input
+##############################################################################
+keyboard_input:
+lw $t2, 4 ($t0) # Load second word from keyboard
+beq $t2, 0x71, respond_to_Q # check if the key q was pressed
+beq $t2, 0x61, respond_to_A # check if the key a was pressed
+beq $t2, 0x73, respond_to_S # check if the key s was pressed
+beq $t2, 0x64, respond_to_D # check if the key d was pressed
+beq $t2, 0x77, respond_to_W # check if the key w was pressed
+
+##############################################################################
+# Code for responding to key press Q
+##############################################################################
+respond_to_Q:
+li $v0, 10                  # terminate the program gracefully
+syscall
+
+##############################################################################
+# Code for responding to key press A
+##############################################################################
+respond_to_A:
+li $v0, 10                  # terminate the program gracefully
+syscall
+
+##############################################################################
+# Code for responding to key press S
+##############################################################################
+respond_to_S:
+li $v0, 10                  # terminate the program gracefully
+syscall
+
+##############################################################################
+# Code for responding to key press D
+##############################################################################
+respond_to_D:
+li $v0, 10                  # terminate the program gracefully
+syscall
+
+##############################################################################
+# Code for responding to key press W
+##############################################################################
+respond_to_W:
+li $v0, 10                  # terminate the program gracefully
 syscall
 
 ##############################################################################
@@ -44,7 +96,7 @@ rand_column:
 addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)              # push $ra to the stack for nested function
 addi $t2, $s0, 272          # add the horizontal - column 5 (4 x 4) and vertical - row 3 (128 x 2) offest to $s0
-addi $t4, $t2, 384           # calculate the postion of the last pixel in the column
+addi $t4, $t2, 384          # calculate the postion of the last pixel in the column
 rand_column_loop:
 jal rand_color              # call rand_color to get a random color in $v0
 beq $t4, $t2, rand_column_loop_end # check if the current position is the end of the column, if so branch out of the loop
@@ -53,15 +105,14 @@ addi $t2, $t2, 128          # Move to the next pixel in the column
 j rand_column_loop          # Jump to the start of the loop
 rand_column_loop_end:
 lw $ra, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4          # move stack pointer back to the top of the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 jr $ra
-# draw the pixel
-# move to the next row
-# randomly generate an integer for one of the six colors
-# draw the pixel
-# move to the next row
-# randomly generate an integer for one of the six colors
-# draw the pixel
+
+##############################################################################
+# Code selecting a random color
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $s1 = address of the first color
 
 rand_color:
 # randomly generate an integer for one of the six colors
@@ -74,6 +125,7 @@ sll $t3, $a0, 2             # multiply index by 4 (word size)
 add $t3, $t3, $s1           # color address = address of first color + offset
 lw $v0, 0($t3)              # load color into return value $v0
 jr $ra
+
 ##############################################################################
 # Code for drawing a rectangle
 ##############################################################################
