@@ -40,15 +40,10 @@ game_loop:
 lw $t0, keyboardaddress 
 lw $t8, 0($t0)              # load first word from keyboard
 
-bne $t8, 1, continue_loop  # if first word 1 key is not pressed
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $s4, 0($sp)          # store value of bottom of loop
-b keyboard_input
-lw $s4, 0($sp) 
-addi $sp, $sp, 4
-add $s4, $s4, $v0
+bne $t8, 1, no_keyboard_input  # if first word 1 key is not pressed
+jal keyboard_input
 
-continue_loop:
+no_keyboard_input:
 j game_loop
 
 ##############################################################################
@@ -76,7 +71,7 @@ syscall
 ##############################################################################
 respond_to_A:
 
-li $t6, 8
+addi $t6, $s0, 520
 beq $s4, $t6, END_A #if at edge, don't move
 
 lw $t9, 0($s4)          #get colour from bottom of col, store in t9
@@ -113,7 +108,7 @@ addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 sw $t9, 0($s4)              # draws column pixel to the left position
 
 END_A: 
-li $v0, -4
+
 jr $ra
 
 ##############################################################################
@@ -164,14 +159,13 @@ lw $t6, 0($t6)
 j MOVE_COL_DOWN_ENTIRELY
 
 END_S:
-li $v0, 0
 j draw_col
 
 ##############################################################################
 # Code for responding to key press D
 ##############################################################################
 respond_to_D:
-li $t6, 56
+addi $t6, $s0, 540
 beq $s4, $t6, END_D #if at right edge, don't move
 
 lw $t9, 0($s4)          #get colour from bottom of col, store in t9
@@ -192,6 +186,8 @@ sw $t9, 0($sp)          # store colour
 sw $zero, 0($s4)        #paint pixel black
 
 addi $s4, $s4, 4         # moves one pixel left and to the bottom pixel
+lw $t9, 20($s1)
+sw $t9, 0($s4)
 
 lw $t9, 0($sp)              # pop $t9 off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
@@ -208,7 +204,6 @@ addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 sw $t9, 0($s4)              # draws column pixel to the left position
 
 END_D:
-li $v0, 4
 jr $ra
 
 ##############################################################################
