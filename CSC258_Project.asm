@@ -61,7 +61,7 @@ addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 j wait
 
 end_move_down:
-beq $t2, $s4, respond_to_Q
+beq $t2, $s4, respond_to_Q      #ends because reached top of board.
 j draw_col
 
 wait:
