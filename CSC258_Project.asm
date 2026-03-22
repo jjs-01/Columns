@@ -4,7 +4,7 @@ colors: .word 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xf28c28, 0xff00ff, 0xffff
 keyboardaddress: .word 0xffff0000
 
 ######################## Bitmap Display Configuration ########################
-# - Unit width in pixels: 8
+# - Unit width in pixels: 8g
 # - Unit height in pixels: 8
 # - Display width in pixels: 256
 # - Display height in pixels: 256
@@ -14,9 +14,6 @@ keyboardaddress: .word 0xffff0000
 lw $s0, ADDR_DSPL           # $s0 = base address for display
 la $s1, colors              # $s1 = address for the first color
 lw $s2, keyboardaddress     # $s2 = address for the keyboard
-
-lw $t8, 0($s2)              # load first word from keyboard
-beq $t8, 1, keyboard_input  # if first word 1 key is pressed
 
 # initialize the drawing of white game area rectangle
 addi $a0, $zero, 1          # set the X coordinate
@@ -35,20 +32,37 @@ add $t9, $zero, $zero       # set the colour of the rectangle to be black
 jal rect_draw               # calls rectangle drawing function.
 
 # initialize the drawing of the column
+draw_col:
 jal rand_column
-li $v0, 10                  # terminate the program gracefully
-syscall
+addi $s4, $s0, 528          # make $t2 point to final block of the column
+
+game_loop:
+lw $t0, keyboardaddress 
+lw $t8, 0($t0)              # load first word from keyboard
+
+bne $t8, 1, continue_loop  # if first word 1 key is not pressed
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $s4, 0($sp)          # store value of bottom of loop
+b keyboard_input
+lw $s4, 0($sp) 
+addi $sp, $sp, 4
+add $s4, $s4, $v0
+
+continue_loop:
+j game_loop
 
 ##############################################################################
 # Code for responding to keyboard input
 ##############################################################################
 keyboard_input:
-lw $t2, 4 ($t0) # Load second word from keyboard
-beq $t2, 0x71, respond_to_Q # check if the key q was pressed
-beq $t2, 0x61, respond_to_A # check if the key a was pressed
-beq $t2, 0x73, respond_to_S # check if the key s was pressed
-beq $t2, 0x64, respond_to_D # check if the key d was pressed
-beq $t2, 0x77, respond_to_W # check if the key w was pressed
+lw $a0, 4 ($t0) # Load second word from keyboard
+beq $a0, 0x71, respond_to_Q # check if the key q was pressed
+beq $a0, 0x61, respond_to_A # check if the key a was pressed
+beq $a0, 0x73, respond_to_S # check if the key s was pressed
+beq $a0, 0x64, respond_to_D # check if the key d was pressed
+beq $a0, 0x77, respond_to_W # check if the key w was pressed
+
+jr $ra
 
 ##############################################################################
 # Code for responding to key press Q
@@ -61,29 +75,180 @@ syscall
 # Code for responding to key press A
 ##############################################################################
 respond_to_A:
-li $v0, 10                  # terminate the program gracefully
-syscall
+
+li $t6, 8
+beq $s4, $t6, END_A #if at edge, don't move
+
+lw $t9, 0($s4)          #get colour from bottom of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        #paint pixel black
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          #get colour from middle of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        #paint pixel black
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          #get colour from top of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        #paint pixel black
+
+addi $s4, $s4, -4         # moves one pixel left and to the bottom pixel
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the left position
+addi $s4, $s4, 128          # go to next column
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the left position
+addi $s4, $s4, 128          # go to next column
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the left position
+
+END_A: 
+li $v0, -4
+jr $ra
 
 ##############################################################################
 # Code for responding to key press S
 ##############################################################################
 respond_to_S:
-li $v0, 10                  # terminate the program gracefully
-syscall
+addi $t6, $s4, 128          # value one row below t6
+lw $t6, 0($t6) 
+
+MOVE_COL_DOWN_ENTIRELY:
+bne $t6, $zero, END_S       # move until the next colour is not black (i.e. edge or another placed column)
+
+lw $t9, 0($s4)          # get colour from bottom of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        # paint pixel black
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          # get colour from middle of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        # paint pixel black
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          # get colour from top of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        # paint pixel black
+
+addi $s4, $s4, 128          # go to where the second row is currently
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the where the second row is
+addi $s4, $s4, 128          # go to next column
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel where the final row is
+addi $s4, $s4, 128          # go to next column
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel one down from final row
+
+addi $t6, $s4, 128          # increment to next column value
+lw $t6, 0($t6) 
+j MOVE_COL_DOWN_ENTIRELY
+
+END_S:
+li $v0, 0
+j draw_col
 
 ##############################################################################
 # Code for responding to key press D
 ##############################################################################
 respond_to_D:
-li $v0, 10                  # terminate the program gracefully
-syscall
+li $t6, 56
+beq $s4, $t6, END_D #if at right edge, don't move
+
+lw $t9, 0($s4)          #get colour from bottom of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        #paint pixel black
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          #get colour from middle of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        #paint pixel black
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          #get colour from top of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        #paint pixel black
+
+addi $s4, $s4, 4         # moves one pixel left and to the bottom pixel
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the left position
+addi $s4, $s4, 128          # go to next column
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the left position
+addi $s4, $s4, 128          # go to next column
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the left position
+
+END_D:
+li $v0, 4
+jr $ra
 
 ##############################################################################
 # Code for responding to key press W
 ##############################################################################
 respond_to_W:
-li $v0, 10                  # terminate the program gracefully
-syscall
+
+lw $t9, 0($s4)          # get colour from bottom of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          # get colour from middle of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          # get colour from top of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+
+# shift the colours
+addi $s4, $s4, 256          # go to bottom column
+
+lw $t9, 0($sp)              # pop top colour off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws top colour at bottom column
+addi $s4, $s4, -256         # go to top column
+
+lw $t9, 0($sp)              # pop middle colour off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws middle colour at top column
+addi $s4, $s4, 128          # go to middle column
+
+lw $t9, 0($sp)              # pop bottom colour off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws bottom colour at middle column
+
+addi $s4, $s4, 128          # go to bottom column
+jr $ra
 
 ##############################################################################
 # Code for random color column
