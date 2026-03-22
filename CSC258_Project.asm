@@ -41,33 +41,8 @@ game_loop:
 lw $t0, keyboardaddress 
 lw $t8, 0($t0)              # load first word from keyboard
 
-bne $t8, 1, move_col_down  # if first word 1 key is not pressed
+bne $t8, 1, redraw  # if first word 1 key is not pressed
 jal keyboard_input
-j redraw
-
-move_col_down:
-addi $t6, $s4, 128          # value one row below t6
-lw $t6, 0($t6)              # load colour at t6 into t6
-bne $t6, $zero, end_move_down
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $ra, 0($sp)          # store current $ra in stack
-
-addi $a0, $zero, 128         # set the amount to move the column by (down 1 row)
-jal redraw_column
-
-lw $ra, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-j wait
-
-end_move_down:
-beq $t2, $s4, respond_to_Q
-j draw_col
-
-wait:
-li $v0, 32
-li $a0, 500
-syscall
 
 # TODO: redraw
 redraw:
