@@ -770,50 +770,6 @@ addi $sp, $sp, 4
 jr $ra
 
 ##############################################################################
-# Code for getting the colours from the current column and adding colours to stack
-##############################################################################
-# $s4 = location of bottom pixel of column
-# $t9 = colour of current popped off pixel
-# $a0 = new location to draw column at
-
-redraw_column:
-lw $t9, 0($s4)          # get colour from bottom of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
-
-lw $t9, 0($s4)          #get colour from middle of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
-
-lw $t9, 0($s4)          #get colour from top of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-
-add $s4, $s4, $a0         # moves pixel by specified amount
-
-# draw at new $s4 location
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-
-jr $ra 
-
-##############################################################################
 # Code for drawing a rectangle
 ##############################################################################
 # $s0 = location of the top-left corner of the bitmap
