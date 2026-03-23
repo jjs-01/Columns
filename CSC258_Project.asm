@@ -46,20 +46,30 @@ game_loop:
 lw $s2, keyboardaddress 
 lw $t8, 0($s2)              # load first word from keyboard
 
-bne $t8, 1, redraw  # if first word 1 key is not pressed
+bne $t8, 1, final_state  # if first word 1 key is not pressed
 j keyboard_input
 
-draw_new_col:       # add checking if row is not availablel (until available 3rd row space)
+
+draw_new_col:
 jal rand_column
 addi $s4, $s0, 528
 
 # TODO: collision detection (final state check)
+final_state:
+addi $t2, $s0, 264
+addi $t3, $s0, 288
 
-# TODO: redraw
-redraw:
+check_top_row:
+addi $t2, $t2, 4
+beq $t2, $t3, sleep
+addi $t4, $s4, -256
+beq $t2, $t4, check_top_row
+lw $t9, 0($t2)
+bne $t9, $zero, respond_to_Q        # if the row is not black, then the game is lost
+j check_top_row
 
 
-# sleep (for frame rate)
+sleep:
 li $v0, 32
 li $a0, 16
 syscall
@@ -108,7 +118,7 @@ lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 END_A: 
-j redraw
+j final_state
 
 ##############################################################################
 # Code for responding to key press S
@@ -117,7 +127,7 @@ respond_to_S:
 addi $t6, $s4, 128          # value one row below t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
-# addi $t2, $s4, 0                # load into $t2 the initial value of the bottom of column
+addi $t8, $s4, 0
 
 MOVE_COL_DOWN_ENTIRELY:
 bne $t6, $zero, END_S       # move until the next colour is not black (i.e. edge or another placed column)
@@ -162,12 +172,14 @@ jal three_in_col
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
-# beq $t2, $s4, return_s
+beq $t8, $s4, end_game_check
 j draw_new_col
 
-# return_s:
-# j redraw
-
+end_game_check:
+addi $s4, $s4, -256     #top of s4
+lw $t6, 0($s4)
+bne $t6, $zero, respond_to_Q        #if top not zero, end game
+j draw_new_col
 
 
 ##############################################################################
@@ -192,7 +204,7 @@ lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 END_D:
-j redraw
+j final_state
 
 ##############################################################################
 # Code for responding to key press W
@@ -231,7 +243,7 @@ addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 sw $t9, 0($s4)              # draws bottom colour at middle column
 
 addi $s4, $s4, 128          # go to bottom column
-j redraw
+j final_state
 
 ##############################################################################
 # Code for random color column
