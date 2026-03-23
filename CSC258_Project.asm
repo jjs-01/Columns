@@ -51,6 +51,24 @@ j keyboard_input
 
 
 draw_new_col:
+addi $t8, $s0, 528                  # location where bottom of column should be placed
+lw $t6, 0($t8)                      # load $t6 with $t8 colour
+beq $t6, $zero, draw_col_at_top     # if it's zero (not occupied), then game is not lost, otherwise...
+lw $t9, 24($s1)                     # load t9 with white (draw impossible squares with white)
+
+addi $t8, $t8, -128                 # go to pixel above where column is supposed to be drawn
+lw $t6, 0($t8)                      # load $t6 with $t8 colour
+bne $t6, $zero, check_top            # if the column is black, paint with white
+sw $t9, 0($t8)
+
+check_top:
+addi $t8, $t8, -128                 # go two pixels above where column is supposed to be drawn
+lw $t6, 0($t8)                      # load $t6 with $t8 colour
+bne $t6, $zero, respond_to_Q        # if the column is black, paint with white
+sw $t9, 0($t8)
+j respond_to_Q
+
+draw_col_at_top:
 jal rand_column
 addi $s4, $s0, 528
 
@@ -176,12 +194,14 @@ lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 beq $t8, $s4, end_game_check
-j draw_new_col
+j return_s
 
 end_game_check:
 addi $s4, $s4, -256     #top of s4
 lw $t6, 0($s4)
-bne $t6, $zero, respond_to_Q        #if top not zero, end game
+bne $t6, $zero, respond_to_Q        # if top not zero, end game
+
+return_s:
 j draw_new_col
 
 
