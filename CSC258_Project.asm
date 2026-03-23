@@ -4,7 +4,9 @@ colors: .word 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xf28c28, 0xff00ff, 0xffff
 keyboardaddress: .word 0xffff0000
 game_board: .space 360
 
-
+##############################################################################
+# Julia Sinclair 1011047564 and Mei Walters 1011183167
+##############################################################################
 ######################## Bitmap Display Configuration ########################
 # - Unit width in pixels: 8g
 # - Unit height in pixels: 8
@@ -310,9 +312,7 @@ jr $ra
 # $t2 = row of bottom pixel of the newest pixel
 # $t3 = original column of the bottom pixel of the newest pixel
 # $t4 = color of the pixel
-# $t5 = temp index
 # $t6 = address of starting pixel in the game_board
-# $t7 = loaded color
 
 remove_match_3:
 addi $sp, $sp, -4
@@ -340,7 +340,11 @@ find_left:
 addi $t1, $t0, -1           # $t0 is the column to the left of $t3
 bltz $t1, left_done         # if $t0 is less than zero then $t3 is the left most pixel, jumpt to left_done
 
-addi $t5, $t6, -4           # $t5 the index of the pixel to the left
+li $t6, 6
+mul $t5, $t2, $t6           # row * 6
+add $t5, $t5, $t1           # + col
+sll $t5, $t5, 2             # *4 (word size)
+add $t5, $s3, $t5           # $t5 refers to location of game_board[pixel to the left]
 
 lw $t7, 0($t5)              # load the color of the left pixel to $t7
 bne $t7, $t4, left_done     # compare the pixel colours 
@@ -352,13 +356,17 @@ left_done:
 # find the right bound
 move $t1, $t3               # right bound = col
 find_right:
-addi $t5, $t1, 1            # $t8 is the column to the right of $t3
-li $t9, 6
+addi $t5, $t1, 1            # $t5 is the column to the right of $t3
+li $t9, 6                   # INDEXING ISSUE HERE?
 bge $t5, $t9, right_done    # check if the $t3 is the right most pixel
 
-addi $t5, $t6, 4            # $t5 the index of the pixel to the left
+li $t6, 6
+mul $t8, $t2, $t6           # row * 6
+add $t8, $t8, $t5           # + col
+sll $t8, $t8, 2             # *4 (word size)
+add $t8, $s3, $t8           # $t8 refers to location of game_board[pixel to the left]
 
-lw $t7, 0($t5)              # color at the right pixel
+lw $t7, 0($t8)              # color at the right pixel
 bne $t7, $t4, right_done    # if the colors don't match break out of loop
 
 move $t1, $t5
@@ -386,7 +394,6 @@ sw $zero, 0($t7)   # clear gem in game_board
 
 # calculate pixel position on screen
 
-# SOME ISSUE HERE!!!!!!!
 # vertical offset = (row + 2) * 128
 addi $t7, $t2, 2            # add the two boarder rows
 sll $t7, $t7, 7             # multiply by 128
@@ -399,6 +406,8 @@ add $t7, $t8, $t7           # add horizontal offset to vertical offset
 sw $zero, 0($t7)            # clear gem on screen
 
 addi $t5, $t5, 1
+
+# TODO drop gems above
 j clear_loop
 
 ##################################
