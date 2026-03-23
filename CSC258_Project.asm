@@ -12,14 +12,15 @@ keyboardaddress: .word 0xffff0000
 ##############################################################################
 .text
 lw $s0, ADDR_DSPL           # $s0 = base address for display
-la $s1, colors              # $s1 = address for the first color
+la $s1, colors              # $s1 = base address for colors
 lw $s2, keyboardaddress     # $s2 = address for the keyboard
+la $s3, pixel_array         # $s3 = base address for pixel_array
 
 # initialize the drawing of white game area rectangle
 addi $a0, $zero, 1          # set the X coordinate
 addi $a1, $zero, 1          # set the Y coordinate
 addi $a2, $zero, 8          # set the width of the rectangle (6 + 2)
-addi $a3, $zero, 16         # set the height of the rectangle (14 + 2)
+addi $a3, $zero, 17         # set the height of the rectangle (14 + 2)
 lw $t9, 24($s1)             # loads white from colors
 jal rect_draw               # calls rectangle drawing function.
 
@@ -27,7 +28,7 @@ jal rect_draw               # calls rectangle drawing function.
 addi $a0, $zero, 2          # set the X coordinate
 addi $a1, $zero, 2          # set the Y coordinate
 addi $a2, $zero, 6          # set the width of the rectangle (6)
-addi $a3, $zero, 14         # set the height of the rectangle (14)
+addi $a3, $zero, 15         # set the height of the rectangle (14)
 add $t9, $zero, $zero       # set the colour of the rectangle to be black
 jal rect_draw               # calls rectangle drawing function.
 
@@ -35,20 +36,17 @@ jal rect_draw               # calls rectangle drawing function.
 draw_col:
 jal rand_column
 addi $s4, $s0, 528          # make $t2 point to final block of the column
+addi $t2, $s4, 0
 
 game_loop:
 lw $t0, keyboardaddress 
 lw $t8, 0($t0)              # load first word from keyboard
 
-bne $t8, 1, continue_loop  # if first word 1 key is not pressed
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $s4, 0($sp)          # store value of bottom of loop
-b keyboard_input
-lw $s4, 0($sp) 
-addi $sp, $sp, 4
-add $s4, $s4, $v0
+bne $t8, 1, redraw  # if first word 1 key is not pressed
+jal keyboard_input
 
-continue_loop:
+# TODO: redraw
+redraw:
 j game_loop
 
 ##############################################################################
@@ -75,45 +73,21 @@ syscall
 # Code for responding to key press A
 ##############################################################################
 respond_to_A:
+addi $t6, $s4, -4           # value one left of s4
+lw $t6, 0($t6)              # load colour at t6 into t6
 
-li $t6, 8
-beq $s4, $t6, END_A #if at edge, don't move
+bne $t6, $zero, END_A       # move until the next colour is not black (i.e. edge or another placed column)
 
-lw $t9, 0($s4)          #get colour from bottom of col, store in t9
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
+sw $ra, 0($sp)          # store current $ra in stack
 
-lw $t9, 0($s4)          #get colour from middle of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
+addi $a0, $zero, -4          # set the amount to move the column by (4 left)
+jal redraw_column
 
-lw $t9, 0($s4)          #get colour from top of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-
-addi $s4, $s4, -4         # moves one pixel left and to the bottom pixel
-
-lw $t9, 0($sp)              # pop $t9 off the stack
+lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
 
 END_A: 
-li $v0, -4
 jr $ra
 
 ##############################################################################
@@ -121,94 +95,55 @@ jr $ra
 ##############################################################################
 respond_to_S:
 addi $t6, $s4, 128          # value one row below t6
-lw $t6, 0($t6) 
+lw $t6, 0($t6)              # load colour at t6 into t6
+
+addi $t2, $s4, 0                # load into $t2 the initial value of the bottom of column
 
 MOVE_COL_DOWN_ENTIRELY:
 bne $t6, $zero, END_S       # move until the next colour is not black (i.e. edge or another placed column)
 
-lw $t9, 0($s4)          # get colour from bottom of col, store in t9
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        # paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
+sw $ra, 0($sp)          # store current $ra in stack
 
-lw $t9, 0($s4)          # get colour from middle of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        # paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
-
-lw $t9, 0($s4)          # get colour from top of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        # paint pixel black
-
-addi $s4, $s4, 128          # go to where the second row is currently
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the where the second row is
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel where the final row is
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel one down from final row
+addi $a0, $zero, 128         # set the amount to move the column by (down 1 row)
+jal redraw_column
 
 addi $t6, $s4, 128          # increment to next column value
-lw $t6, 0($t6) 
+lw $t6, 0($t6)              # load colour at t6 into t6
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+li $v0, 32
+li $a0, 16
+syscall
+
 j MOVE_COL_DOWN_ENTIRELY
 
 END_S:
-li $v0, 0
-j draw_col
+bne $t2, $s4, draw_col      # if the position of s4 has changed, no collision, draw new column
+jr $ra                      # TODO: end game in this case
+
 
 ##############################################################################
 # Code for responding to key press D
 ##############################################################################
 respond_to_D:
-li $t6, 56
-beq $s4, $t6, END_D #if at right edge, don't move
+addi $t6, $s4, 4           # value one right of s4
+lw $t6, 0($t6)              # load colour at t6 into t6
 
-lw $t9, 0($s4)          #get colour from bottom of col, store in t9
+bne $t6, $zero, END_D       # move until the next colour is not black (i.e. edge or another placed column)
+
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
+sw $ra, 0($sp)          # store current $ra in stack
 
-lw $t9, 0($s4)          #get colour from middle of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
+addi $a0, $zero, 4          # set the amount to move the column by (4 right)
+jal redraw_column
 
-lw $t9, 0($s4)          #get colour from top of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-
-addi $s4, $s4, 4         # moves one pixel left and to the bottom pixel
-
-lw $t9, 0($sp)              # pop $t9 off the stack
+lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
 
 END_D:
-li $v0, 4
 jr $ra
 
 ##############################################################################
@@ -290,6 +225,51 @@ sll $t3, $a0, 2             # multiply index by 4 (word size)
 add $t3, $t3, $s1           # color address = address of first color + offset
 lw $v0, 0($t3)              # load color into return value $v0
 jr $ra
+
+
+##############################################################################
+# Code for getting the colours from the current column and adding colours to stack
+##############################################################################
+# $s4 = location of bottom pixel of column
+# $t9 = colour of current popped off pixel
+# $a0 = new location to draw column at
+
+redraw_column:
+lw $t9, 0($s4)          # get colour from bottom of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        #paint pixel black
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          #get colour from middle of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        #paint pixel black
+addi $s4, $s4, -128     # go to next row in column 
+
+lw $t9, 0($s4)          #get colour from top of col, store in t9
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)          # store colour
+sw $zero, 0($s4)        #paint pixel black
+
+add $s4, $s4, $a0         # moves pixel by specified amount
+
+# draw at new $s4 location
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the left position
+addi $s4, $s4, 128          # go to next column
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the left position
+addi $s4, $s4, 128          # go to next column
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+sw $t9, 0($s4)              # draws column pixel to the left position
+
+jr $ra 
 
 ##############################################################################
 # Code for drawing a rectangle
