@@ -375,14 +375,28 @@ move $t5, $t0   # start col
 clear_loop:
 bgt $t5, $t1, end_remove
 
-
+# calculate pixel position in game_board
 li $t6, 6
 mul $t7, $t2, $t6           # row * 6
 add $t7, $t7, $t5           # + col
 sll $t7, $t7, 2             # *4 (word size)
 add $t7, $s3, $t7           
 
-sw $zero, 0($t7)   # clear tile
+sw $zero, 0($t7)   # clear gem in game_board
+
+# calculate pixel position on screen
+
+# SOME ISSUE HERE!!!!!!!
+# vertical offset = (row + 2) * 128
+addi $t7, $t2, 2            # add the two boarder rows
+sll $t7, $t7, 7             # multiply by 128
+# horizontal offset = (column + 2) * 4
+addi $t8, $t5, 2            # add two boarder columns           
+sll $t8, $t8, 2             # multiply by 4
+add $t7, $t7, $s0           # add vertical offset to $s0
+add $t7, $t8, $t7           # add horizontal offset to vertical offset
+
+sw $zero, 0($t7)            # clear gem on screen
 
 addi $t5, $t5, 1
 j clear_loop
