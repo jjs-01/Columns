@@ -334,8 +334,14 @@ beq $t7, $zero, return_checking_row      # if t7 is black, do an early return
 addi $t1, $t0, -8           # go two spots left
 lw $t4, 0($t1)               # add colour to t4
 
+beq $t4, $t9, one_left_one_right_order      # if t4 is white, do an early return
+beq $t4, $zero, one_left_one_right_order      # if t4 is black, do an early return
+
 addi $t3, $t0, -4           # go one spot left
 lw $t5, 0($t3)               # add colour to t5
+
+beq $t5, $t9, one_left_one_right_order      # if t4 is white, do an early return
+beq $t5, $zero, one_left_one_right_order      # if t5 is black, do an early return
 
 bne $t4, $t5, one_left_one_right_order          # if t4 != t5, go to next case
 bne $t7, $t4, one_left_one_right_order          # cond: t4 == t5, but t4 != t7, so go to next case
@@ -369,11 +375,18 @@ addi $a1, $t0, 0
 jal move_down_and_check
 
 one_left_one_right_order:
+lw $t9, 24($s1)
 addi $t1, $t0, -4           # go one spot left
 lw $t4, 0($t1)               # add colour to t4
 
+beq $t4, $t9, two_right_order      # if t4 is white, do an early return
+beq $t4, $zero, two_right_order      # if t4 is black, do an early return
+
 addi $t3, $t0, 4           # go one spot right
 lw $t5, 0($t3)               # add colour to t5
+
+beq $t5, $t9, two_right_order      # if t4 is white, do an early return
+beq $t5, $zero, two_right_order      # if t4 is black, do an early return
 
 bne $t4, $t5, two_right_order          # if t4 != t5, go to next case
 bne $t7, $t4, two_right_order          # cond: t4 == t5, but t4 != t7, so go to next case
@@ -409,11 +422,18 @@ addi $a1, $t0, 0
 jal move_down_and_check
 
 two_right_order:
+lw $t9, 24($s1)
 addi $t1, $t0, 4           # go one spot left
 lw $t4, 0($t1)               # add colour to t4
 
+beq $t4, $t9, return_checking_row      # if t4 is white, do an early return
+beq $t4, $zero, return_checking_row      # if t4 is black, do an early return
+
 addi $t3, $t0, 8           # go two spots left
 lw $t5, 0($t3)           # add colour to t5
+
+beq $t5, $t9, return_checking_row      # if t4 is white, do an early return
+beq $t5, $zero, return_checking_row      # if t4 is black, do an early return
 
 bne $t4, $t5, return_checking_row          # if t4 != t5, go to next case
 bne $t7, $t4, return_checking_row          # cond: t4 == t5, but t4 != t7, so go to next case
@@ -612,9 +632,9 @@ addi $t6, $t6, 128
 j move_down_columns
 
 check_new_collisions:
-addi $a1, $a1, -128         # move a1 to be the first item in the column that was moved
 
-recursive_checker:
+collision_loop:
+addi $a1, $a1, -128         # move a1 to be the first item in the column that was moved
 beq $a1, $t6, return_move_down
 addi $a0, $a1, 0
 jal three_in_row
@@ -622,8 +642,7 @@ jal three_in_row
 addi $a0, $a1, 0
 jal three_in_col
 
-addi $a1, $a1, -128         # move t2 to the next above pixel
-j recursive_checker
+bne $a1, $t6, collision_loop
 
 return_move_down:
 lw $ra, 0($sp)              # pop $ra off the stack
