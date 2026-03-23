@@ -16,7 +16,7 @@ game_board: .space 360
 lw $s0, ADDR_DSPL           # $s0 = base address for display
 la $s1, colors              # $s1 = address for the first color
 lw $s2, keyboardaddress     # $s2 = address for the keyboard
-la $s3, game_board
+la $s3, game_board          # $s3 = address for game_board
 
 # initialize the drawing of white game area rectangle
 addi $a0, $zero, 1          # set the X coordinate
@@ -41,14 +41,13 @@ addi $s4, $s0, 528          # make $t2 point to final block of the column
 addi $t2, $s4, 0
 
 game_loop:
-lw $t0, keyboardaddress 
-lw $t8, 0($t0)              # load first word from keyboard
+lw $s2, keyboardaddress 
+lw $t8, 0($s2)              # load first word from keyboard
 
 bne $t8, 1, redraw  # if first word 1 key is not pressed
 jal keyboard_input
 
 # TODO: collision detection
-
 # TODO: redraw
 redraw:
 
@@ -64,7 +63,7 @@ j game_loop
 # Code for responding to keyboard input
 ##############################################################################
 keyboard_input:
-lw $a0, 4 ($t0) # Load second word from keyboard
+lw $a0, 4 ($s2) # Load second word from keyboard
 beq $a0, 0x71, respond_to_Q # check if the key q was pressed
 beq $a0, 0x61, respond_to_A # check if the key a was pressed
 beq $a0, 0x73, respond_to_S # check if the key s was pressed
@@ -134,18 +133,22 @@ j MOVE_COL_DOWN_ENTIRELY
 END_S:
 beq $t2, $s4, return_s
 
+##############################################################################
+# Code for saving a pixel in game_board
+##############################################################################
+# TODO: Make this a function to write a pixel to its game_board location
 lw $t4, 0($s4)              # $t4 is the colour at $s4
 sub $t5, $s4, $s0           # $t5 refers to pixel position from display base
 add $t5, $t5, -264          # now $t5 refers to the position without the edges of grid
 srl $t2, $t5, 7             # $ t2 = row = offset / 128
 # $t3 = col = (offset % 128) / 4
-andi $t3, $t5, 127    # offset % 128
-srl $t3, $t3, 2       # divide by 4
+andi $t3, $t5, 127          # offset % 128
+srl $t3, $t3, 2             # divide by 4
 
 li $t6, 6
-mul $t5, $t2, $t6     # row * 6
-add $t5, $t5, $t3     # + col
-sll $t5, $t5, 2       # *4 (word size)
+mul $t5, $t2, $t6           # row * 6
+add $t5, $t5, $t3           # + col
+sll $t5, $t5, 2             # *4 (word size)
 
 add $t3, $s3, $t5           # $t3 refers to location of game_board[bottom pixel placed]
 sw $t4, 0($t3)                # game_board[bottom pixel] = colour at s4
@@ -183,13 +186,16 @@ mul $t5, $t2, $t6     # row * 6
 add $t5, $t5, $t3     # + col
 sll $t5, $t5, 2       # *4 (word size)
 
-add $t3, $s3, $t5           # $t3 refers to location of game_board[bottom pixel placed]
+add $t3, $s3, $t5               # $t3 refers to location of game_board[bottom pixel placed]
 sw $t4, 0($t3)                # game_board[bottom pixel] = colour at s4
 
-j draw_col
+addi $s4, $s4, 256              # restore $s4
 
+jal remove_match_3
+j draw_col
 return_s:
 jr $ra                      
+
 
 
 ##############################################################################
@@ -293,6 +299,99 @@ add $t3, $t3, $s1           # color address = address of first color + offset
 lw $v0, 0($t3)              # load color into return value $v0
 jr $ra
 
+##############################################################################
+# Code for calculating 3 in a row
+##############################################################################
+# $s0 = address for the display
+# $s3 = address for the game_board
+# $s4 = address for the bottom pixel of the newest column
+# $t0 = left bound
+# $t1 = right bound
+# $t2 = row of bottom pixel of the newest pixel
+# $t3 = original column of the bottom pixel of the newest pixel
+# $t4 = color of the pixel
+# $t5 = temp index
+# $t6 = address of starting pixel in the game_board
+# $t7 = loaded color
+
+remove_match_3:
+addi $sp, $sp, -4
+sw $ra, 0($sp)
+
+lw $t4, 0($s4)              # Take the color of the last pixel of newest column
+
+# calculating index of the pixel
+sub $t5, $s4, $s0           # $t5 refers to pixel position from display base
+add $t5, $t5, -264          # now $t5 refers to the position without the edges of grid
+srl $t2, $t5, 7             # $ t2 = row = offset / 128
+                            # $t3 = col = (offset % 128) / 4
+
+andi $t3, $t5, 127          # offset % 128
+srl $t3, $t3, 2             # divide by 4
+
+li $t6, 6
+mul $t5, $t2, $t6           # row * 6
+add $t5, $t5, $t3           # + col
+sll $t5, $t5, 2             # *4 (word size)
+add $t6, $s3, $t5           # $t6 refers to location of game_board[bottom pixel placed]
+# find the left bound of matches
+move $t0, $t3
+find_left:
+addi $t1, $t0, -1           # $t0 is the column to the left of $t3
+bltz $t1, left_done         # if $t0 is less than zero then $t3 is the left most pixel, jumpt to left_done
+
+addi $t5, $t6, -4           # $t5 the index of the pixel to the left
+
+lw $t7, 0($t5)              # load the color of the left pixel to $t7
+bne $t7, $t4, left_done     # compare the pixel colours 
+
+move $t0, $t1               # make the left pixel the current pixel
+j find_left
+left_done:
+
+# find the right bound
+move $t1, $t3               # right bound = col
+find_right:
+addi $t5, $t1, 1            # $t8 is the column to the right of $t3
+li $t9, 6
+bge $t5, $t9, right_done    # check if the $t3 is the right most pixel
+
+addi $t5, $t6, 4            # $t5 the index of the pixel to the left
+
+lw $t7, 0($t5)              # color at the right pixel
+bne $t7, $t4, right_done    # if the colors don't match break out of loop
+
+move $t1, $t5
+j find_right
+right_done:
+
+# clear from left to right
+sub $t5, $t1, $t0           # right bound - left bound
+addi $t5, $t5, 1
+
+li $t9, 3
+blt $t5, $t9, end_remove      # check if the match section is 3 or greater
+move $t5, $t0   # start col
+clear_loop:
+bgt $t5, $t1, end_remove
+
+
+li $t6, 6
+mul $t7, $t2, $t6           # row * 6
+add $t7, $t7, $t5           # + col
+sll $t7, $t7, 2             # *4 (word size)
+add $t7, $s3, $t7           
+
+sw $zero, 0($t7)   # clear tile
+
+addi $t5, $t5, 1
+j clear_loop
+
+##################################
+end_remove:
+lw $ra, 0($sp)
+addi $sp, $sp, 4
+jr $ra
 
 ##############################################################################
 # Code for getting the colours from the current column and adding colours to stack
