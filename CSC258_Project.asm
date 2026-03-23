@@ -51,6 +51,24 @@ j keyboard_input
 
 
 draw_new_col:
+addi $t8, $s0, 528                  # location where bottom of column should be placed
+lw $t6, 0($t8)                      # load $t6 with $t8 colour
+beq $t6, $zero, draw_col_at_top     # if it's zero (not occupied), then game is not lost, otherwise...
+lw $t9, 24($s1)                     # load t9 with white (draw impossible squares with white)
+
+addi $t8, $t8, -128                 # go to pixel above where column is supposed to be drawn
+lw $t6, 0($t8)                      # load $t6 with $t8 colour
+bne $t6, $zero, check_top            # if the column is black, paint with white
+sw $t9, 0($t8)
+
+check_top:
+addi $t8, $t8, -128                 # go two pixels above where column is supposed to be drawn
+lw $t6, 0($t8)                      # load $t6 with $t8 colour
+bne $t6, $zero, respond_to_Q        # if the column is black, paint with white
+sw $t9, 0($t8)
+j respond_to_Q
+
+draw_col_at_top:
 jal rand_column
 addi $s4, $s0, 528
 
@@ -160,25 +178,30 @@ sw $ra, 0($sp)          # store return
 addi $a0, $s4, -256            # make the argument for $a0 point to top of stack
 jal three_in_row
 jal three_in_col
+jal three_in_diagonal
 
 addi $a0, $a0, 128          # make the argument for $a0 point to middle of stack
 jal three_in_row
 jal three_in_col
+jal three_in_diagonal
 
 addi $a0, $a0, 128          # make the argument for $a0 point to bottom  of stack
 jal three_in_row
 jal three_in_col
+jal three_in_diagonal
 
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 beq $t8, $s4, end_game_check
-j draw_new_col
+j return_s
 
 end_game_check:
 addi $s4, $s4, -256     #top of s4
 lw $t6, 0($s4)
-bne $t6, $zero, respond_to_Q        #if top not zero, end game
+bne $t6, $zero, respond_to_Q        # if top not zero, end game
+
+return_s:
 j draw_new_col
 
 
@@ -493,7 +516,7 @@ jr $ra
 
 
 ##############################################################################
-# Code for checking 3 in a row from pixel
+# Code for checking 3 in a col from pixel
 ##############################################################################
 # $a0 = pixel we start from
 # $t0 = pixel to check
@@ -597,6 +620,282 @@ addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 jr $ra
 
 
+
+
+##############################################################################
+# Code for checking 3 in a col from pixel
+##############################################################################
+# $a0 = pixel we start from
+# $t0 = pixel to check
+# t1 = location of one in the column
+# $t3 = location of two in the column
+# $t4 = colour of one in the column
+# $t5 = colour of two in the column
+# $t7 = colour of a0
+# $t9 = colour of white
+
+three_in_diagonal:
+# store return to stack
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)          # store return
+
+addi $t0, $a0, 0
+lw $t7, 0($t0)
+
+lw $t9, 24($s1)
+beq $t7, $t9, return_checking_col      # if t7 is white, do an early return
+
+beq $t7, $zero, return_checking_col      # if t7 is black, do an early return
+
+# check the t1, t2, a0 order
+
+addi $t1, $t0, -264           # go two spots down
+lw $t4, 0($t1)               # add colour to t4
+
+addi $t3, $t0, -132           # go one spot down
+lw $t5, 0($t3)               # add colour to t5
+
+bne $t4, $t5, negative_one_up_one_down_diagonal          # if t4 != t5, go to next case
+bne $t7, $t4, negative_one_up_one_down_diagonal          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+negative_one_up_one_down_diagonal:
+addi $t1, $t0, -132           # go one spot up
+lw $t4, 0($t1)              # add colour to t4
+
+addi $t3, $t0, 132           # go one spot down
+lw $t5, 0($t3)               # add colour to t5
+
+bne $t4, $t5, negative_two_down_order          # if t4 != t5, go to next case
+bne $t7, $t4, negative_two_down_order          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+negative_two_down_order:
+addi $t1, $t0, 132           # go one spot up
+lw $t4, 0($t1)               # add colour to t4
+
+addi $t3, $t0, 264        # go two spots up
+lw $t5, 0($t3)           # add colour to t5
+
+bne $t4, $t5, pos_two_up_order          # if t4 != t5, go to next case
+bne $t7, $t4, pos_two_up_order          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+pos_two_up_order:
+addi $t1, $t0, -124           # go one spot up
+lw $t4, 0($t1)               # add colour to t4
+
+addi $t3, $t0, -248        # go two spots up
+lw $t5, 0($t3)           # add colour to t5
+
+bne $t4, $t5, pos_up_down_order          # if t4 != t5, go to next case
+bne $t7, $t4, pos_up_down_order          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+pos_up_down_order:
+addi $t1, $t0, -124           # go one spot up
+lw $t4, 0($t1)               # add colour to t4
+
+addi $t3, $t0, 124        # go two spots up
+lw $t5, 0($t3)           # add colour to t5
+
+bne $t4, $t5, pos_two_down_order          # if t4 != t5, go to next case
+bne $t7, $t4, pos_two_down_order          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+
+pos_two_down_order:
+addi $t1, $t0, 124           # go one spot up
+lw $t4, 0($t1)               # add colour to t4
+
+addi $t3, $t0, 248        # go two spots up
+lw $t5, 0($t3)           # add colour to t5
+
+bne $t4, $t5, return_checking_diagonal          # if t4 != t5, go to next case
+bne $t7, $t4, return_checking_diagonal          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+return_checking_diagonal:
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+
 ##############################################################################
 # Code for moving down a column and checking collisions
 ##############################################################################
@@ -657,6 +956,9 @@ jal three_in_row
 
 addi $a0, $a1, 0
 jal three_in_col
+
+addi $a0, $a1, 0
+jal three_in_diagonal
 
 bne $a1, $t6, collision_loop
 
