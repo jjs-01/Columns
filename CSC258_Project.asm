@@ -4,6 +4,7 @@ colors: .word 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xf28c28, 0xff00ff, 0xffff
 keyboardaddress: .word 0xffff0000
 game_board: .space 360
 
+
 ##############################################################################
 # Julia Sinclair 1011047564 and Mei Walters 1011183167
 ##############################################################################
@@ -39,17 +40,21 @@ jal rect_draw               # calls rectangle drawing function.
 # initialize the drawing of the column
 draw_col:
 jal rand_column
-addi $s4, $s0, 528          # make $t2 point to final block of the column
-addi $t2, $s4, 0
+addi $s4, $s0, 528          # make $s4 point to final block of the column
 
 game_loop:
 lw $s2, keyboardaddress 
 lw $t8, 0($s2)              # load first word from keyboard
 
 bne $t8, 1, redraw  # if first word 1 key is not pressed
-jal keyboard_input
+j keyboard_input
 
-# TODO: collision detection
+draw_new_col:       # add checking if row is not availablel (until available 3rd row space)
+jal rand_column
+addi $s4, $s0, 528
+
+# TODO: collision detection (final state check)
+
 # TODO: redraw
 redraw:
 
@@ -94,13 +99,16 @@ addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stac
 sw $ra, 0($sp)          # store current $ra in stack
 
 addi $a0, $zero, -4          # set the amount to move the column by (4 left)
+addi $a1, $s4, 0
 jal redraw_column
+
+addi $s4, $s4, -4          # increment to right
 
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 END_A: 
-jr $ra
+j redraw
 
 ##############################################################################
 # Code for responding to key press S
@@ -109,7 +117,7 @@ respond_to_S:
 addi $t6, $s4, 128          # value one row below t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
-addi $t2, $s4, 0                # load into $t2 the initial value of the bottom of column
+# addi $t2, $s4, 0                # load into $t2 the initial value of the bottom of column
 
 MOVE_COL_DOWN_ENTIRELY:
 bne $t6, $zero, END_S       # move until the next colour is not black (i.e. edge or another placed column)
@@ -118,9 +126,11 @@ addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stac
 sw $ra, 0($sp)          # store current $ra in stack
 
 addi $a0, $zero, 128         # set the amount to move the column by (down 1 row)
+addi $a1, $s4, 0
 jal redraw_column
 
-addi $t6, $s4, 128          # increment to next column value
+addi $s4, $s4, 128          # increment to next column value
+addi $t6, $s4, 128          # increment t6 to next column value
 lw $t6, 0($t6)              # load colour at t6 into t6
 
 lw $ra, 0($sp)              # pop $ra off the stack
@@ -133,70 +143,30 @@ syscall
 j MOVE_COL_DOWN_ENTIRELY
 
 END_S:
-beq $t2, $s4, return_s
+# store return to stack
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)          # store return
 
-##############################################################################
-# Code for saving a pixel in game_board
-##############################################################################
-# TODO: Make this a function to write a pixel to its game_board location
-lw $t4, 0($s4)              # $t4 is the colour at $s4
-sub $t5, $s4, $s0           # $t5 refers to pixel position from display base
-add $t5, $t5, -264          # now $t5 refers to the position without the edges of grid
-srl $t2, $t5, 7             # $ t2 = row = offset / 128
-# $t3 = col = (offset % 128) / 4
-andi $t3, $t5, 127          # offset % 128
-srl $t3, $t3, 2             # divide by 4
+addi $a0, $s4, -256            # make the argument for $a0 point to top of stack
+jal three_in_row
+jal three_in_col
 
-li $t6, 6
-mul $t5, $t2, $t6           # row * 6
-add $t5, $t5, $t3           # + col
-sll $t5, $t5, 2             # *4 (word size)
+addi $a0, $a0, 128          # make the argument for $a0 point to middle of stack
+jal three_in_row
+jal three_in_col
 
-add $t3, $s3, $t5           # $t3 refers to location of game_board[bottom pixel placed]
-sw $t4, 0($t3)                # game_board[bottom pixel] = colour at s4
+addi $a0, $a0, 128          # make the argument for $a0 point to bottom  of stack
+jal three_in_row
+jal three_in_col
 
-addi $s4, $s4, -128         # go to middle column
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
-lw $t4, 0($s4)              # $t4 is the colour at $s4
-sub $t5, $s4, $s0           # $t5 refers to pixel position from display base
-add $t5, $t5, -264          # now $t5 refers to the position without the edges of grid
-srl $t2, $t5, 7             # $ t2 = row = offset / 128
-# $t3 = col = (offset % 128) / 4
-andi $t3, $t5, 127    # offset % 128
-srl $t3, $t3, 2       # divide by 4
+# beq $t2, $s4, return_s
+j draw_new_col
 
-li $t6, 6
-mul $t5, $t2, $t6     # row * 6
-add $t5, $t5, $t3     # + col
-sll $t5, $t5, 2       # *4 (word size)
-
-add $t3, $s3, $t5           # $t3 refers to location of game_board[bottom pixel placed]
-sw $t4, 0($t3)                # game_board[bottom pixel] = colour at s4
-
-addi $s4, $s4, -128         # go to top column
-
-lw $t4, 0($s4)              # $t4 is the colour at $s4
-sub $t5, $s4, $s0           # $t5 refers to pixel position from display base
-add $t5, $t5, -264          # now $t5 refers to the position without the edges of grid
-srl $t2, $t5, 7             # $ t2 = row = offset / 128
-# $t3 = col = (offset % 128) / 4
-andi $t3, $t5, 127    # offset % 128
-srl $t3, $t3, 2       # divide by 4
-
-li $t6, 6
-mul $t5, $t2, $t6     # row * 6
-add $t5, $t5, $t3     # + col
-sll $t5, $t5, 2       # *4 (word size)
-
-add $t3, $s3, $t5               # $t3 refers to location of game_board[bottom pixel placed]
-sw $t4, 0($t3)                # game_board[bottom pixel] = colour at s4
-
-addi $s4, $s4, 256              # restore $s4
-
-jal remove_match_3
-j draw_col
-return_s:
-jr $ra                      
+# return_s:
+# j redraw
 
 
 
@@ -213,13 +183,16 @@ addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stac
 sw $ra, 0($sp)          # store current $ra in stack
 
 addi $a0, $zero, 4          # set the amount to move the column by (4 right)
+addi $a1, $s4, 0
 jal redraw_column
+
+addi $s4, $s4, 4          # increment to right
 
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 END_D:
-jr $ra
+j redraw
 
 ##############################################################################
 # Code for responding to key press W
@@ -258,7 +231,7 @@ addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 sw $t9, 0($s4)              # draws bottom colour at middle column
 
 addi $s4, $s4, 128          # go to bottom column
-jr $ra
+j redraw
 
 ##############################################################################
 # Code for random color column
@@ -305,46 +278,381 @@ jr $ra
 ##############################################################################
 # Code for getting the colours from the current column and adding colours to stack
 ##############################################################################
-# $s4 = location of bottom pixel of column
+# $t4 = colour of bottom pixel
+# $t5 = colour of middle pixel
+# $t7 = colour of top pixel
 # $t9 = colour of current popped off pixel
 # $a0 = new location to draw column at
+# $a1 = location of bottom pixel of column
 
 redraw_column:
-lw $t9, 0($s4)          # get colour from bottom of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
+lw $t4, 0($a1)          # get colour from bottom of col, store in t4
+sw $zero, 0($a1)        #paint pixel black
+addi $a1, $a1, -128     # go to next row in column 
 
-lw $t9, 0($s4)          #get colour from middle of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
+lw $t5, 0($a1)          #get colour from middle of col, store in t5
+sw $zero, 0($a1)        #paint pixel black
+addi $a1, $a1, -128     # go to next row in column 
 
-lw $t9, 0($s4)          #get colour from top of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
+lw $t7, 0($a1)          #get colour from top of col, store in t7
+sw $zero, 0($a1)        #paint pixel black
 
-add $s4, $s4, $a0         # moves pixel by specified amount
+add $a1, $a1, $a0         # moves pixel by specified amount
 
 # draw at new $s4 location
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
+sw $t7, 0($a1)              # draws column pixel to the changed position
+addi $a1, $a1, 128          # go to next column
 
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
+sw $t5, 0($a1)              # draws column pixel to the left position
+addi $a1, $a1, 128          # go to next column
 
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
+sw $t4, 0($a1)              # draws column pixel to the left position
 
 jr $ra 
+
+##############################################################################
+# Code for checking 3 in a row from pixel
+##############################################################################
+# $a0 = pixel we start from
+# $t1 = location of one in the row
+# $t3 = location of two in the row
+# $t4 = colour of one in the row
+# $t5 = colour of two in the row
+# $t7 = colour of a0
+# $t9 = colour of white
+
+three_in_row:
+# store return to stack
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)          # store return
+
+addi $t0, $a0, 0
+lw $t7, 0($t0)
+
+lw $t9, 24($s1)
+beq $t7, $t9, return_checking_row      # if t7 is white, do an early return
+
+beq $t7, $zero, return_checking_row      # if t7 is black, do an early return
+
+# check the t1, t2, a0 order
+addi $t1, $t0, -8           # go two spots left
+lw $t4, 0($t1)               # add colour to t4
+
+beq $t4, $t9, one_left_one_right_order      # if t4 is white, do an early return
+beq $t4, $zero, one_left_one_right_order      # if t4 is black, do an early return
+
+addi $t3, $t0, -4           # go one spot left
+lw $t5, 0($t3)               # add colour to t5
+
+beq $t5, $t9, one_left_one_right_order      # if t4 is white, do an early return
+beq $t5, $zero, one_left_one_right_order      # if t5 is black, do an early return
+
+bne $t4, $t5, one_left_one_right_order          # if t4 != t5, go to next case
+bne $t7, $t4, one_left_one_right_order          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $a1, $t3, 0
+jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+addi $a1, $t0, 0
+jal move_down_and_check
+
+one_left_one_right_order:
+lw $t9, 24($s1)
+addi $t1, $t0, -4           # go one spot left
+lw $t4, 0($t1)               # add colour to t4
+
+beq $t4, $t9, two_right_order      # if t4 is white, do an early return
+beq $t4, $zero, two_right_order      # if t4 is black, do an early return
+
+addi $t3, $t0, 4           # go one spot right
+lw $t5, 0($t3)               # add colour to t5
+
+beq $t5, $t9, two_right_order      # if t4 is white, do an early return
+beq $t5, $zero, two_right_order      # if t4 is black, do an early return
+
+bne $t4, $t5, two_right_order          # if t4 != t5, go to next case
+bne $t7, $t4, two_right_order          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+two_right_order:
+lw $t9, 24($s1)
+addi $t1, $t0, 4           # go one spot left
+lw $t4, 0($t1)               # add colour to t4
+
+beq $t4, $t9, return_checking_row      # if t4 is white, do an early return
+beq $t4, $zero, return_checking_row      # if t4 is black, do an early return
+
+addi $t3, $t0, 8           # go two spots left
+lw $t5, 0($t3)           # add colour to t5
+
+beq $t5, $t9, return_checking_row      # if t4 is white, do an early return
+beq $t5, $zero, return_checking_row      # if t4 is black, do an early return
+
+bne $t4, $t5, return_checking_row          # if t4 != t5, go to next case
+bne $t7, $t4, return_checking_row          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+return_checking_row:
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+
+
+##############################################################################
+# Code for checking 3 in a row from pixel
+##############################################################################
+# $a0 = pixel we start from
+# $t0 = pixel to check
+# t1 = location of one in the column
+# $t3 = location of two in the column
+# $t4 = colour of one in the column
+# $t5 = colour of two in the column
+# $t7 = colour of a0
+# $t9 = colour of white
+
+three_in_col:
+# store return to stack
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)          # store return
+
+addi $t0, $a0, 0
+lw $t7, 0($t0)
+
+lw $t9, 24($s1)
+beq $t7, $t9, return_checking_col      # if t7 is white, do an early return
+
+beq $t7, $zero, return_checking_col      # if t7 is black, do an early return
+
+# check the t1, t2, a0 order
+
+addi $t1, $t0, 256           # go two spots down
+lw $t4, 0($t1)               # add colour to t4
+
+addi $t3, $t0, 128           # go one spot down
+lw $t5, 0($t3)               # add colour to t5
+
+bne $t4, $t5, one_up_one_down_order          # if t4 != t5, go to next case
+bne $t7, $t4, one_up_one_down_order          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+one_up_one_down_order:
+addi $t1, $t0, -128           # go one spot up
+lw $t4, 0($t1)              # add colour to t4
+
+addi $t3, $t0, 128           # go one spot down
+lw $t5, 0($t3)               # add colour to t5
+
+bne $t4, $t5, two_up_order          # if t4 != t5, go to next case
+bne $t7, $t4, two_up_order          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+two_up_order:
+addi $t1, $t0, -128           # go one spot up
+lw $t4, 0($t1)               # add colour to t4
+
+addi $t3, $t0, -256        # go two spots up
+lw $t5, 0($t3)           # add colour to t5
+
+bne $t4, $t5, return_checking_col          # if t4 != t5, go to next case
+bne $t7, $t4, return_checking_col          # cond: t4 == t5, but t4 != t7, so go to next case
+
+# paint each node black
+sw $zero, 0($t0)
+sw $zero, 0($t1)
+sw $zero, 0($t3)
+
+addi $a1, $t1, 0
+jal move_down_and_check
+
+addi $a1, $t3, 0
+jal move_down_and_check
+
+addi $a1, $t0, 0
+jal move_down_and_check
+
+return_checking_col:
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+
+##############################################################################
+# Code for moving down a column and checking collisions
+##############################################################################
+# $a1 = position of pixel which was deleted
+# $t2 = 
+# $t6 =
+# $t9 = colour of pixel
+
+move_down_and_check:
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)          # store return
+lw $t2, 24($s1)         # make t2 white
+
+addi $t6, $a1, -128     # move to possible start of floating column with a1
+lw $t9, 0($t6)          # get colour at t6
+beq $t9, $zero, return_checking_col         # if the space above a1 is black, then this is not the pixel meant to move down the column
+beq $t9, $t2, return_checking_col           # if the space above a1 is white, then this is not the pixel meant to move down the column
+
+# find location of first black/white at the top of the column
+find_top:
+lw $t9, 0($t6)
+beq $t9, $zero, move_down_columns
+beq $t9, $t2, move_down_columns
+addi $t6, $t6, -128
+j find_top
+
+move_down_columns:
+lw $t9, 0($a1)
+bne $t9, $zero, check_new_collisions
+addi $t2, $a1, -128         # move t2 to be the colour above empty space a1
+lw $t9, 0($t2)              # store colour in t9
+sw $t9, 0($a1)              # paint empty space with a1 colour
+
+move_column_inner_loop:
+sw $zero, 0($t2)            # paint empty space black
+addi $t2, $t2, -128         # move t2 to be the colour above empty space
+beq $t2, $t6, move_column_inner_loop_end
+lw $t9, 0($t2)              # store colour in t9
+
+addi $t2, $t2, 128         # move t2 to be the empty space
+sw $t9, 0($t2)          # paint empty space with above colour
+
+addi $t2, $t2, -128         # move t2 to next above space
+j move_column_inner_loop
+
+move_column_inner_loop_end:
+addi $a1, $a1, 128
+addi $t6, $t6, 128
+j move_down_columns
+
+check_new_collisions:
+
+collision_loop:
+addi $a1, $a1, -128         # move a1 to be the first item in the column that was moved
+beq $a1, $t6, return_move_down
+addi $a0, $a1, 0
+jal three_in_row
+
+addi $a0, $a1, 0
+jal three_in_col
+
+bne $a1, $t6, collision_loop
+
+return_move_down:
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jr $ra
+
 
 ##############################################################################
 # Code for calculating 3 in a row
@@ -460,50 +768,6 @@ end_remove:
 lw $ra, 0($sp)
 addi $sp, $sp, 4
 jr $ra
-
-##############################################################################
-# Code for getting the colours from the current column and adding colours to stack
-##############################################################################
-# $s4 = location of bottom pixel of column
-# $t9 = colour of current popped off pixel
-# $a0 = new location to draw column at
-
-redraw_column:
-lw $t9, 0($s4)          # get colour from bottom of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
-
-lw $t9, 0($s4)          #get colour from middle of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-addi $s4, $s4, -128     # go to next row in column 
-
-lw $t9, 0($s4)          #get colour from top of col, store in t9
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)          # store colour
-sw $zero, 0($s4)        #paint pixel black
-
-add $s4, $s4, $a0         # moves pixel by specified amount
-
-# draw at new $s4 location
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-addi $s4, $s4, 128          # go to next column
-
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws column pixel to the left position
-
-jr $ra 
 
 ##############################################################################
 # Code for drawing a rectangle
