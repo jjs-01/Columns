@@ -144,15 +144,15 @@ END_S:
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
 
-addi $a0, $s4, 0            # make the argument for $a0 point to bottom of stack
+addi $a0, $s4, -256            # make the argument for $a0 point to top of stack
 jal three_in_row
 jal three_in_col
 
-addi $a0, $a0, -128          # make the argument for $a0 point to middle of stack
+addi $a0, $a0, 128          # make the argument for $a0 point to middle of stack
 jal three_in_row
 jal three_in_col
 
-addi $a0, $a0, -128          # make the argument for $a0 point to middle of stack
+addi $a0, $a0, 128          # make the argument for $a0 point to bottom  of stack
 jal three_in_row
 jal three_in_col
 
@@ -322,7 +322,8 @@ three_in_row:
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
 
-lw $t7, 0($a0)
+addi $t0, $a0, 0
+lw $t7, 0($t0)
 
 lw $t9, 24($s1)
 beq $t7, $t9, return_checking_row      # if t7 is white, do an early return
@@ -330,17 +331,17 @@ beq $t7, $t9, return_checking_row      # if t7 is white, do an early return
 beq $t7, $zero, return_checking_row      # if t7 is black, do an early return
 
 # check the t1, t2, a0 order
-addi $t1, $a0, -8           # go two spots left
+addi $t1, $t0, -8           # go two spots left
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $a0, -4           # go one spot left
+addi $t3, $t0, -4           # go one spot left
 lw $t5, 0($t3)               # add colour to t5
 
 bne $t4, $t5, one_left_one_right_order          # if t4 != t5, go to next case
 bne $t7, $t4, one_left_one_right_order          # cond: t4 == t5, but t4 != t7, so go to next case
 
 # paint each node black
-sw $zero, 0($a0)
+sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
@@ -350,21 +351,21 @@ jal move_down_and_check
 addi $a1, $t3, 0
 jal move_down_and_check
 
-addi $a1, $t4, 0
+addi $a1, $t0, 0
 jal move_down_and_check
 
 one_left_one_right_order:
-addi $t1, $a0, -4           # go one spot left
+addi $t1, $t0, -4           # go one spot left
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $a0, 4           # go one spot right
+addi $t3, $t0, 4           # go one spot right
 lw $t5, 0($t3)               # add colour to t5
 
 bne $t4, $t5, two_right_order          # if t4 != t5, go to next case
 bne $t7, $t4, two_right_order          # cond: t4 == t5, but t4 != t7, so go to next case
 
 # paint each node black
-sw $zero, 0($a0)
+sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
@@ -374,21 +375,21 @@ jal move_down_and_check
 addi $a1, $t3, 0
 jal move_down_and_check
 
-addi $a1, $t4, 0
+addi $a1, $t0, 0
 jal move_down_and_check
 
 two_right_order:
-addi $t1, $a0, 4           # go one spot left
+addi $t1, $t0, 4           # go one spot left
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $a0, 8           # go two spots left
+addi $t3, $t0, 8           # go two spots left
 lw $t5, 0($t3)           # add colour to t5
 
 bne $t4, $t5, return_checking_row          # if t4 != t5, go to next case
 bne $t7, $t4, return_checking_row          # cond: t4 == t5, but t4 != t7, so go to next case
 
 # paint each node black
-sw $zero, 0($a0)
+sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
@@ -398,7 +399,7 @@ jal move_down_and_check
 addi $a1, $t3, 0
 jal move_down_and_check
 
-addi $a1, $t4, 0
+addi $a1, $t0, 0
 jal move_down_and_check
 
 return_checking_row:
@@ -413,7 +414,8 @@ jr $ra
 # Code for checking 3 in a row from pixel
 ##############################################################################
 # $a0 = pixel we start from
-# $t1 = location of one in the column
+# $t0 = pixel to check
+# t1 = location of one in the column
 # $t3 = location of two in the column
 # $t4 = colour of one in the column
 # $t5 = colour of two in the column
@@ -425,7 +427,8 @@ three_in_col:
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
 
-lw $t7, 0($a0)
+addi $t0, $a0, 0
+lw $t7, 0($t0)
 
 lw $t9, 24($s1)
 beq $t7, $t9, return_checking_col      # if t7 is white, do an early return
@@ -434,17 +437,17 @@ beq $t7, $zero, return_checking_col      # if t7 is black, do an early return
 
 # check the t1, t2, a0 order
 
-addi $t1, $a0, 256           # go two spots down
+addi $t1, $t0, 256           # go two spots down
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $a0, 128           # go one spot down
+addi $t3, $t0, 128           # go one spot down
 lw $t5, 0($t3)               # add colour to t5
 
 bne $t4, $t5, one_up_one_down_order          # if t4 != t5, go to next case
 bne $t7, $t4, one_up_one_down_order          # cond: t4 == t5, but t4 != t7, so go to next case
 
 # paint each node black
-sw $zero, 0($a0)
+sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
@@ -454,21 +457,21 @@ jal move_down_and_check
 addi $a1, $t3, 0
 jal move_down_and_check
 
-addi $a1, $t4, 0
+addi $a1, $t0, 0
 jal move_down_and_check
 
 one_up_one_down_order:
-addi $t1, $a0, -128           # go one spot up
+addi $t1, $t0, -128           # go one spot up
 lw $t4, 0($t1)              # add colour to t4
 
-addi $t3, $a0, 128           # go one spot down
+addi $t3, $t0, 128           # go one spot down
 lw $t5, 0($t3)               # add colour to t5
 
 bne $t4, $t5, two_up_order          # if t4 != t5, go to next case
 bne $t7, $t4, two_up_order          # cond: t4 == t5, but t4 != t7, so go to next case
 
 # paint each node black
-sw $zero, 0($a0)
+sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
@@ -478,21 +481,21 @@ jal move_down_and_check
 addi $a1, $t3, 0
 jal move_down_and_check
 
-addi $a1, $t4, 0
+addi $a1, $t0, 0
 jal move_down_and_check
 
 two_up_order:
-addi $t1, $a0, -128           # go one spot up
+addi $t1, $t0, -128           # go one spot up
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $a0, -256        # go two spots up
+addi $t3, $t0, -256        # go two spots up
 lw $t5, 0($t3)           # add colour to t5
 
 bne $t4, $t5, return_checking_col          # if t4 != t5, go to next case
 bne $t7, $t4, return_checking_col          # cond: t4 == t5, but t4 != t7, so go to next case
 
 # paint each node black
-sw $zero, 0($a0)
+sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
@@ -502,7 +505,7 @@ jal move_down_and_check
 addi $a1, $t3, 0
 jal move_down_and_check
 
-addi $a1, $t4, 0
+addi $a1, $t0, 0
 jal move_down_and_check
 
 return_checking_col:
@@ -516,34 +519,65 @@ jr $ra
 # Code for moving down a column and checking collisions
 ##############################################################################
 # $a1 = position of pixel which was deleted
-# $t2 =
+# $t2 = 
 # $t6 =
-# $t4 = colour of one in the column
-# $t5 = colour of two in the column
-# $t7 = colour of a0
-# $t9 = colour of white
+# $t9 = colour of pixel
 
 move_down_and_check:
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
-
-addi $a1, $a1, -128     # move to possible start of floating column with a1
-beq $a1, $zero, return_checking_col         # if the space above a1 is black, then this is not the pixel meant to move down the column
-
-move_down_columns:
 lw $t2, 24($s1)         # make t2 white
 
-addi $t9, $t6, 256      # go to possible edge of columns to move down
-lw $t9, 0($t9)          # get colour
-beq $t9, $t2, check_collisions      # if white, stop moving columns down
+addi $t6, $a1, -128     # move to possible start of floating column with a1
+lw $t9, 0($t6)          # get colour at t6
+beq $t9, $zero, return_checking_col         # if the space above a1 is black, then this is not the pixel meant to move down the column
+beq $t9, $t2, return_checking_col           # if the space above a1 is white, then this is not the pixel meant to move down the column
 
-addi $t9, $t6, 128      # go to possible edge of columns to move down
-lw $t9, 0($t9)          # get colour
-beq $t9, $t2, check_collisions      # if white, stop moving columns down
+# find location of first black/white at the top of the column
+find_top:
+lw $t9, 0($t6)
+beq $t9, $zero, move_down_columns
+beq $t9, $t2, move_down_columns
+addi $t6, $t6, -128
+j find_top
 
+move_down_columns:
+lw $t9, 0($a1)
+bne $t9, $zero, check_new_collisions
+addi $t2, $a1, -128         # move t2 to be the colour above empty space a1
+lw $t9, 0($t2)              # store colour in t9
+sw $t9, 0($a1)              # paint empty space with a1 colour
 
+move_column_inner_loop:
+sw $zero, 0($t2)            # paint empty space black
+addi $t2, $t2, -128         # move t2 to be the colour above empty space
+beq $t2, $t6, move_column_inner_loop_end
+lw $t9, 0($t2)              # store colour in t9
 
-check_collisions:
+addi $t2, $t2, 128         # move t2 to be the empty space
+sw $t9, 0($t2)          # paint empty space with above colour
+
+addi $t2, $t2, -128         # move t2 to next above space
+j move_column_inner_loop
+
+move_column_inner_loop_end:
+addi $a1, $a1, 128
+addi $t6, $t6, 128
+j move_down_columns
+
+check_new_collisions:
+addi $a1, $a1, -128         # move a1 to be the first item in the column that was moved
+
+recursive_checker:
+beq $a1, $t6, return_move_down
+addi $a0, $a1, 0
+jal three_in_row
+
+addi $a0, $a1, 0
+jal three_in_col
+
+addi $a1, $a1, -128         # move t2 to the next above pixel
+j recursive_checker
 
 return_move_down:
 lw $ra, 0($sp)              # pop $ra off the stack
