@@ -345,12 +345,26 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
 addi $a1, $t1, 0
 jal move_down_and_check
 
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
 addi $a1, $t3, 0
 jal move_down_and_check
 
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 addi $a1, $t0, 0
 jal move_down_and_check
 
@@ -369,11 +383,27 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
 addi $a1, $t1, 0
 jal move_down_and_check
 
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
 addi $a1, $t3, 0
 jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 addi $a1, $t0, 0
 jal move_down_and_check
@@ -393,11 +423,27 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
 addi $a1, $t1, 0
 jal move_down_and_check
 
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
 addi $a1, $t3, 0
 jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 addi $a1, $t0, 0
 jal move_down_and_check
