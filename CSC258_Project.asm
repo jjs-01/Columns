@@ -2,6 +2,8 @@
 ADDR_DSPL: .word 0x10008000
 colors: .word 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xf28c28, 0xff00ff, 0xffffff   # red, green, blue, yellow, orange, magenta, white
 keyboardaddress: .word 0xffff0000
+game_board: .space 1440
+
 
 ######################## Bitmap Display Configuration ########################
 # - Unit width in pixels: 8g
@@ -14,12 +16,13 @@ keyboardaddress: .word 0xffff0000
 lw $s0, ADDR_DSPL           # $s0 = base address for display
 la $s1, colors              # $s1 = address for the first color
 lw $s2, keyboardaddress     # $s2 = address for the keyboard
+la $s3, game_board
 
 # initialize the drawing of white game area rectangle
 addi $a0, $zero, 1          # set the X coordinate
 addi $a1, $zero, 1          # set the Y coordinate
 addi $a2, $zero, 8          # set the width of the rectangle (6 + 2)
-addi $a3, $zero, 17         # set the height of the rectangle (14 + 2)
+addi $a3, $zero, 17         # set the height of the rectangle (15 + 2)
 lw $t9, 24($s1)             # loads white from colors
 jal rect_draw               # calls rectangle drawing function.
 
@@ -27,7 +30,7 @@ jal rect_draw               # calls rectangle drawing function.
 addi $a0, $zero, 2          # set the X coordinate
 addi $a1, $zero, 2          # set the Y coordinate
 addi $a2, $zero, 6          # set the width of the rectangle (6)
-addi $a3, $zero, 15         # set the height of the rectangle (14)
+addi $a3, $zero, 15         # set the height of the rectangle (15)
 add $t9, $zero, $zero       # set the colour of the rectangle to be black
 jal rect_draw               # calls rectangle drawing function.
 
@@ -44,8 +47,17 @@ lw $t8, 0($t0)              # load first word from keyboard
 bne $t8, 1, redraw  # if first word 1 key is not pressed
 jal keyboard_input
 
+# TODO: collision detection
+
 # TODO: redraw
 redraw:
+
+
+# sleep (for frame rate)
+li $v0, 32
+li $a0, 16
+syscall
+
 j game_loop
 
 ##############################################################################
@@ -113,22 +125,50 @@ lw $t6, 0($t6)              # load colour at t6 into t6
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
-li $v0, 32
-li $a0, 16
+li $v0, 32                  # dropping animation
+li $a0, 8          
 syscall
 
 j MOVE_COL_DOWN_ENTIRELY
 
 END_S:
-bne $t2, $s4, draw_col      # if the position of s4 has changed, no collision, draw new column
-jr $ra                      # TODO: end game in this case
+beq $t2, $s4, return_s
+
+la $t8, game_board          # $t8 refers to game_board
+
+lw $t4, 0($s4)              # $t4 is the colour at $s4
+sub $t5, $s4, $s0           # $t5 refers to pixel position of value without $s0 offset
+add $t5, $t5, -264          # now $t5 refers to the position without the edges of grid
+add $t3, $t8, $t5           # $t3 refers to location of game_board[bottom pixel placed]
+sw $t4, 0($t3)                # game_board[bottom pixel] = colour at s4
+
+addi $s4, $s4, -128         # go to middle column
+
+lw $t4, 0($s4)              # $t4 is the colour at $s4
+sub $t5, $s4, $s0           # $t5 refers to pixel position of value without $s0 offset
+add $t5, $t5, -264          # now $t5 refers to the position without the edges of grid
+add $t3, $t8, $t5           # $t3 refers to location of game_board[middle pixel placed]
+sw $t4, 0($t3)                # game_board[middle pixel] = colour at s4
+
+addi $s4, $s4, -128         # go to top column
+
+lw $t4, 0($s4)              # $t4 is the colour at $s4
+sub $t5, $s4, $s0           # $t5 refers to pixel position of value without $s0 offset
+add $t5, $t5, -264          # now $t5 refers to the position without the edges of grid
+add $t3, $t8, $t5           # $t3 refers to location of game_board[top pixel placed]
+sw $t4, 0($t3)                # game_board[top pixel] = colour at s4
+
+j draw_col
+
+return_s:
+jr $ra                      
 
 
 ##############################################################################
 # Code for responding to key press D
 ##############################################################################
 respond_to_D:
-addi $t6, $s4, 4           # value one right of s4
+addi $t6, $s4, 4            # value one right of s4
 lw $t6, 0($t6)              # load colour at t6 into t6
 
 bne $t6, $zero, END_D       # move until the next colour is not black (i.e. edge or another placed column)
