@@ -40,7 +40,7 @@ jal rect_draw               # calls rectangle drawing function.
 # initialize the drawing of the column
 draw_col:
 jal rand_column
-addi $s4, $s0, 528          # make $s4 point to final block of the column
+li $s4, 56           # $s4 = offset for the bottom of the column being moved on game_board
 
 game_loop:
 lw $s2, keyboardaddress 
@@ -51,41 +51,43 @@ j keyboard_input
 
 
 draw_new_col:
-addi $t8, $s0, 528                  # location where bottom of column should be placed
-lw $t6, 0($t8)                      # load $t6 with $t8 colour
-beq $t6, $zero, draw_col_at_top     # if it's zero (not occupied), then game is not lost, otherwise...
-lw $t9, 24($s1)                     # load t9 with white (draw impossible squares with white)
+#addi $t8, $s0, 528                  # location where bottom of column should be placed
+# lw $t6, 0($t8)                      # load $t6 with $t8 colour
+#beq $t6, $zero, draw_col_at_top     # if it's zero (not occupied), then game is not lost, otherwise...
+# lw $t9, 24($s1)                     # load t9 with white (draw impossible squares with white)
 
-addi $t8, $t8, -128                 # go to pixel above where column is supposed to be drawn
-lw $t6, 0($t8)                      # load $t6 with $t8 colour
-bne $t6, $zero, check_top            # if the column is black, paint with white
-sw $t9, 0($t8)
+#addi $t8, $t8, -128                 # go to pixel above where column is supposed to be drawn
+#lw $t6, 0($t8)                      # load $t6 with $t8 colour
+#bne $t6, $zero, check_top            # if the column is black, paint with white
+#sw $t9, 0($t8)
 
-check_top:
-addi $t8, $t8, -128                 # go two pixels above where column is supposed to be drawn
-lw $t6, 0($t8)                      # load $t6 with $t8 colour
-bne $t6, $zero, respond_to_Q        # if the column is black, paint with white
-sw $t9, 0($t8)
-j respond_to_Q
+#check_top:
+#addi $t8, $t8, -128                 # go two pixels above where column is supposed to be drawn
+#lw $t6, 0($t8)                      # load $t6 with $t8 colour
+#bne $t6, $zero, respond_to_Q        # if the column is black, paint with white
+#sw $t9, 0($t8)
+#j respond_to_Q
 
-draw_col_at_top:
-jal rand_column
-addi $s4, $s0, 528
+#draw_col_at_top:
+#jal rand_column
+#addi $s4, $s0, 528
 
 # TODO: collision detection (final state check)
+#final_state:
+#addi $t2, $s0, 264
+#addi $t3, $s0, 288
+
+#check_top_row:
+#addi $t2, $t2, 4
+#beq $t2, $t3, sleep
+#addi $t4, $s4, -256
+#beq $t2, $t4, check_top_row
+#lw $t9, 0($t2)
+#bne $t9, $zero, respond_to_Q        # if the row is not black, then the game is lost
+#j check_top_row
+
 final_state:
-addi $t2, $s0, 264
-addi $t3, $s0, 288
-
-check_top_row:
-addi $t2, $t2, 4
-beq $t2, $t3, sleep
-addi $t4, $s4, -256
-beq $t2, $t4, check_top_row
-lw $t9, 0($t2)
-bne $t9, $zero, respond_to_Q        # if the row is not black, then the game is lost
-j check_top_row
-
+jal redraw_game_board
 
 sleep:
 li $v0, 32
@@ -118,10 +120,17 @@ syscall
 # Code for responding to key press A
 ##############################################################################
 respond_to_A:
-addi $t6, $s4, -4           # value one left of s4
+li $t6, 24                      # load $t6 to be 24
+divu $s4, $t6                   # divide the offset by 24
+mfhi $t6                        # store remainder in $t6
+
+beq $t6, $zero, END_A           # if remainder is zero, end of column, don't move
+
+addi $t6, $s4, -4           # load into $t6 the value one left of s4
+add $t6, $s3, $t6           # get the value of s3 at t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
-bne $t6, $zero, END_A       # move until the next colour is not black (i.e. edge or another placed column)
+bne $t6, $zero, END_A       # if colour isn't black, stop moving
 
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store current $ra in stack
@@ -142,28 +151,33 @@ j final_state
 # Code for responding to key press S
 ##############################################################################
 respond_to_S:
-addi $t6, $s4, 128          # value one row below t6
+add $t6, $s3, $s4           # t6 is the address of bottom of col
+addi $t6, $t6, 24           # value one row below t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
 addi $t8, $s4, 0
 
 MOVE_COL_DOWN_ENTIRELY:
+addi $t0, $s4, -356         # trying to determine if the value is at the final column
+bgtz $t0, END_S
 bne $t6, $zero, END_S       # move until the next colour is not black (i.e. edge or another placed column)
 
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store current $ra in stack
 
-addi $a0, $zero, 128         # set the amount to move the column by (down 1 row)
+addi $a0, $zero, 24         # set the amount to move the column by (down 1 row)
 addi $a1, $s4, 0
 jal redraw_column
 
-addi $s4, $s4, 128          # increment to next column value
-addi $t6, $s4, 128          # increment t6 to next column value
+addi $s4, $s4, 24           # increment to next column value
+add $t6, $s3, $s4           # t6 is the address of bottom of next col
+addi $t6, $t6, 24           # t6 is the address of bottom of next col
 lw $t6, 0($t6)              # load colour at t6 into t6
 
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
+jal redraw_game_board
 li $v0, 32                  # dropping animation
 li $a0, 8          
 syscall
@@ -175,25 +189,25 @@ END_S:
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
 
-addi $a0, $s4, -256            # make the argument for $a0 point to top of stack
+addi $a0, $s4, -48            # make the argument for $a0 point to top of stack
 jal three_in_row
-jal three_in_col
-jal three_in_diagonal
+# jal three_in_col
+# jal three_in_diagonal
 
-addi $a0, $a0, 128          # make the argument for $a0 point to middle of stack
+addi $a0, $a0, 24          # make the argument for $a0 point to middle of stack
 jal three_in_row
-jal three_in_col
-jal three_in_diagonal
+# jal three_in_col
+# jal three_in_diagonal
 
-addi $a0, $a0, 128          # make the argument for $a0 point to bottom  of stack
+addi $a0, $a0, 24          # make the argument for $a0 point to bottom  of stack
 jal three_in_row
-jal three_in_col
-jal three_in_diagonal
+# jal three_in_col
+# jal three_in_diagonal
 
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
-beq $t8, $s4, end_game_check
+# beq $t8, $s4, end_game_check
 j return_s
 
 end_game_check:
@@ -202,14 +216,22 @@ lw $t6, 0($s4)
 bne $t6, $zero, respond_to_Q        # if top not zero, end game
 
 return_s:
-j draw_new_col
+j draw_col
 
 
 ##############################################################################
 # Code for responding to key press D
 ##############################################################################
 respond_to_D:
-addi $t6, $s4, 4            # value one right of s4
+li $t6, 24                      # load $t6 to be 24
+addi $t4, $s4, -20              # subtract 20 from offset (to help check if right end of row)
+divu $t4, $t6                   # divide the offset by 24
+mfhi $t6                        # store remainder in $t6
+
+beq $t6, $zero, END_A           # if remainder is zero, end of column, don't move
+
+addi $t6, $s4, 4            # load into $t6 the value one right of s4
+add $t6, $s3, $t6           # get the value of s3 at t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
 bne $t6, $zero, END_D       # move until the next colour is not black (i.e. edge or another placed column)
@@ -234,38 +256,40 @@ j final_state
 ##############################################################################
 respond_to_W:
 
-lw $t9, 0($s4)          # get colour from bottom of col, store in t9
+add $t6, $s3, $s4      # make $t6 point to the address of bottom of row
+
+lw $t9, 0($t6)          # get colour from bottom of col, store in t9
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $t9, 0($sp)          # store colour
-addi $s4, $s4, -128     # go to next row in column 
+addi $t6, $t6, -24     # go to next row in column 
 
-lw $t9, 0($s4)          # get colour from middle of col, store in t9
+lw $t9, 0($t6)          # get colour from middle of col, store in t9
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $t9, 0($sp)          # store colour
-addi $s4, $s4, -128     # go to next row in column 
+addi $t6, $t6, -24     # go to next row in column 
 
-lw $t9, 0($s4)          # get colour from top of col, store in t9
+lw $t9, 0($t6)          # get colour from top of col, store in t9
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $t9, 0($sp)          # store colour
 
 # shift the colours
-addi $s4, $s4, 256          # go to bottom column
+addi $t6, $t6, 48          # go to bottom column
 
 lw $t9, 0($sp)              # pop top colour off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws top colour at bottom column
-addi $s4, $s4, -256         # go to top column
+sw $t9, 0($t6)              # draws top colour at bottom column
+addi $t6, $t6, -48         # go to top column
 
 lw $t9, 0($sp)              # pop middle colour off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws middle colour at top column
-addi $s4, $s4, 128          # go to middle column
+sw $t9, 0($t6)              # draws middle colour at top column
+addi $t6, $t6, 24          # go to middle column
 
 lw $t9, 0($sp)              # pop bottom colour off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws bottom colour at middle column
+sw $t9, 0($t6)              # draws bottom colour at middle column
 
-addi $s4, $s4, 128          # go to bottom column
+addi $t6, $t6, 24          # go to bottom column
 j final_state
 
 ##############################################################################
@@ -278,13 +302,13 @@ j final_state
 rand_column:
 addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)              # push $ra to the stack for nested function
-addi $t2, $s0, 272          # add the horizontal - column 5 (4 x 4) and vertical - row 3 (128 x 2) offest to $s0
-addi $t4, $t2, 384          # calculate the postion of the last pixel in the column
+addi $t2, $s3, 8            # add the offset from game_board (for row 0, column 3 in the board) to $t2
+addi $t4, $s3, 80           # calculate the postion of the last pixel in the column 
 rand_column_loop:
 jal rand_color              # call rand_color to get a random color in $v0
 beq $t4, $t2, rand_column_loop_end # check if the current position is the end of the column, if so branch out of the loop
 sw $v0, 0($t2)              # draw pixel of color $v0 to location $t2
-addi $t2, $t2, 128          # Move to the next pixel in the column
+addi $t2, $t2, 24           # Move to the next pixel in the column
 j rand_column_loop          # Jump to the start of the loop
 rand_column_loop_end:
 lw $ra, 0($sp)              # pop $ra off the stack
@@ -309,7 +333,6 @@ add $t3, $t3, $s1           # color address = address of first color + offset
 lw $v0, 0($t3)              # load color into return value $v0
 jr $ra
 
-
 ##############################################################################
 # Code for getting the colours from the current column and adding colours to stack
 ##############################################################################
@@ -318,28 +341,29 @@ jr $ra
 # $t7 = colour of top pixel
 # $t9 = colour of current popped off pixel
 # $a0 = new location to draw column at
-# $a1 = location of bottom pixel of column
+# $a1 = offset location of bottom pixel of column
 
 redraw_column:
+add $a1, $s3, $a1       # make a1 point to the address of location of the bottom in the game_board array
 lw $t4, 0($a1)          # get colour from bottom of col, store in t4
-sw $zero, 0($a1)        #paint pixel black
-addi $a1, $a1, -128     # go to next row in column 
+sw $zero, 0($a1)        # paint pixel black
+addi $a1, $a1, -24     # go to next row in column 
 
-lw $t5, 0($a1)          #get colour from middle of col, store in t5
-sw $zero, 0($a1)        #paint pixel black
-addi $a1, $a1, -128     # go to next row in column 
+lw $t5, 0($a1)          # get colour from middle of col, store in t5
+sw $zero, 0($a1)        # paint pixel black
+addi $a1, $a1, -24      # go to next row in column 
 
-lw $t7, 0($a1)          #get colour from top of col, store in t7
-sw $zero, 0($a1)        #paint pixel black
+lw $t7, 0($a1)          # get colour from top of col, store in t7
+sw $zero, 0($a1)        # paint pixel black
 
 add $a1, $a1, $a0         # moves pixel by specified amount
 
 # draw at new $s4 location
 sw $t7, 0($a1)              # draws column pixel to the changed position
-addi $a1, $a1, 128          # go to next column
+addi $a1, $a1, 24           # go to next column
 
 sw $t5, 0($a1)              # draws column pixel to the left position
-addi $a1, $a1, 128          # go to next column
+addi $a1, $a1, 24           # go to next column
 
 sw $t4, 0($a1)              # draws column pixel to the left position
 
@@ -348,40 +372,49 @@ jr $ra
 ##############################################################################
 # Code for checking 3 in a row from pixel
 ##############################################################################
-# $a0 = pixel we start from
+# $a0 = offset of the pixel we start from
+# $t0 = location of the pixel we start from
 # $t1 = location of one in the row
 # $t3 = location of two in the row
 # $t4 = colour of one in the row
 # $t5 = colour of two in the row
 # $t7 = colour of a0
-# $t9 = colour of white
+# $t9 = offset to check by
 
 three_in_row:
 # store return to stack
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
 
-addi $t0, $a0, 0
+add $t0, $s3, $a0       # get to the location of the pixel we start from
 lw $t7, 0($t0)
-
-lw $t9, 24($s1)
-beq $t7, $t9, return_checking_row      # if t7 is white, do an early return
 
 beq $t7, $zero, return_checking_row      # if t7 is black, do an early return
 
+# two_left_order:
 # check the t1, t2, a0 order
-addi $t1, $t0, -8           # go two spots left
+li $t9, 24
+divu $a0, $t9               # see if at edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, two_right_order      # if t4 is at left end of board, go to the two right check
+
+addi $t3, $a0, -4           # go one offset spot left
+divu $t3, $t9               # see if at edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, one_left_one_right_order      # if t4 is one from left end of board, go to the one left one right check
+
+# else:
+addi $t1, $t0, -8           # go two offset spots left
 lw $t4, 0($t1)               # add colour to t4
 
-beq $t4, $t9, one_left_one_right_order      # if t4 is white, do an early return
-beq $t4, $zero, one_left_one_right_order      # if t4 is black, do an early return
+beq $t4, $zero, one_left_one_right_order      # if t4 is black, go to next case
 
 addi $t3, $t0, -4           # go one spot left
 lw $t5, 0($t3)               # add colour to t5
 
-beq $t5, $t9, one_left_one_right_order      # if t4 is white, do an early return
-beq $t5, $zero, one_left_one_right_order      # if t5 is black, do an early return
+beq $t5, $zero, two_right_order      # if t5 is black, go to two right check
 
+# this could possibly be the two_left order
 bne $t4, $t5, one_left_one_right_order          # if t4 != t5, go to next case
 bne $t7, $t4, one_left_one_right_order          # cond: t4 == t5, but t4 != t7, so go to next case
 
@@ -414,17 +447,23 @@ addi $a1, $t0, 0
 jal move_down_and_check
 
 one_left_one_right_order:
-lw $t9, 24($s1)
-addi $t1, $t0, -4           # go one spot left
-lw $t4, 0($t1)               # add colour to t4
 
-beq $t4, $t9, two_right_order      # if t4 is white, do an early return
-beq $t4, $zero, two_right_order      # if t4 is black, do an early return
+# check if at left end of board:
+addi $t5, $a0, -20
+divu $t5, $t9               # see if at left edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, return_checking_row      # if t4 is from left end of board, early return
 
+# load in colour from one right
 addi $t3, $t0, 4           # go one spot right
 lw $t5, 0($t3)               # add colour to t5
 
-beq $t5, $t9, two_right_order      # if t4 is white, do an early return
+# already checked if t1/t4 is beyond bounds or black:
+addi $t1, $t0, -4           # go one spot left
+lw $t4, 0($t1)               # add colour to t4
+
+addi $t3, $t0, 4           # go one spot right
+lw $t5, 0($t3)               # add colour to t5
 beq $t5, $zero, two_right_order      # if t4 is black, do an early return
 
 bne $t4, $t5, two_right_order          # if t4 != t5, go to next case
@@ -461,17 +500,21 @@ addi $a1, $t0, 0
 jal move_down_and_check
 
 two_right_order:
-lw $t9, 24($s1)
+# check if one from left end of board:
+addi $t1, $a0, 4           # go one spot left
+addi $t5, $t1, -20
+divu $t5, $t9               # see if at left edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, return_checking_row      # if t4 is one from left end of board, stop checking
+
 addi $t1, $t0, 4           # go one spot left
 lw $t4, 0($t1)               # add colour to t4
 
-beq $t4, $t9, return_checking_row      # if t4 is white, do an early return
 beq $t4, $zero, return_checking_row      # if t4 is black, do an early return
 
 addi $t3, $t0, 8           # go two spots left
 lw $t5, 0($t3)           # add colour to t5
 
-beq $t5, $t9, return_checking_row      # if t4 is white, do an early return
 beq $t5, $zero, return_checking_row      # if t4 is black, do an early return
 
 bne $t4, $t5, return_checking_row          # if t4 != t5, go to next case
@@ -542,6 +585,7 @@ beq $t7, $zero, return_checking_col      # if t7 is black, do an early return
 
 # check the t1, t2, a0 order
 
+
 addi $t1, $t0, 256           # go two spots down
 lw $t4, 0($t1)               # add colour to t4
 
@@ -556,11 +600,27 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
 addi $a1, $t1, 0
 jal move_down_and_check
 
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
 addi $a1, $t3, 0
 jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 addi $a1, $t0, 0
 jal move_down_and_check
@@ -580,11 +640,27 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
 addi $a1, $t1, 0
 jal move_down_and_check
 
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
 addi $a1, $t3, 0
 jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 addi $a1, $t0, 0
 jal move_down_and_check
@@ -604,11 +680,27 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t3, 0($sp)          # store return
+
 addi $a1, $t1, 0
 jal move_down_and_check
 
+lw $t3, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t0, 0($sp)          # store return
+
 addi $a1, $t3, 0
 jal move_down_and_check
+
+lw $t0, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 addi $a1, $t0, 0
 jal move_down_and_check
@@ -909,7 +1001,7 @@ addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stac
 sw $ra, 0($sp)          # store return
 lw $t2, 24($s1)         # make t2 white
 
-addi $t6, $a1, -128     # move to possible start of floating column with a1
+addi $t6, $a1, -24     # move to possible start of floating column with a1
 lw $t9, 0($t6)          # get colour at t6
 beq $t9, $zero, return_checking_col         # if the space above a1 is black, then this is not the pixel meant to move down the column
 beq $t9, $t2, return_checking_col           # if the space above a1 is white, then this is not the pixel meant to move down the column
@@ -919,53 +1011,93 @@ find_top:
 lw $t9, 0($t6)
 beq $t9, $zero, move_down_columns
 beq $t9, $t2, move_down_columns
-addi $t6, $t6, -128
+addi $t6, $t6, -24
 j find_top
 
 move_down_columns:
 lw $t9, 0($a1)
 bne $t9, $zero, check_new_collisions
-addi $t2, $a1, -128         # move t2 to be the colour above empty space a1
+addi $t2, $a1, -24         # move t2 to be the colour above empty space a1
 lw $t9, 0($t2)              # store colour in t9
 sw $t9, 0($a1)              # paint empty space with a1 colour
 
 move_column_inner_loop:
 sw $zero, 0($t2)            # paint empty space black
-addi $t2, $t2, -128         # move t2 to be the colour above empty space
+addi $t2, $t2, -24         # move t2 to be the colour above empty space
 beq $t2, $t6, move_column_inner_loop_end
 lw $t9, 0($t2)              # store colour in t9
 
-addi $t2, $t2, 128         # move t2 to be the empty space
+addi $t2, $t2, 24         # move t2 to be the empty space
 sw $t9, 0($t2)          # paint empty space with above colour
 
-addi $t2, $t2, -128         # move t2 to next above space
+addi $t2, $t2, -24         # move t2 to next above space
 j move_column_inner_loop
 
 move_column_inner_loop_end:
-addi $a1, $a1, 128
-addi $t6, $t6, 128
+addi $a1, $a1, 24
+addi $t6, $t6, 24
 j move_down_columns
 
 check_new_collisions:
 
-collision_loop:
-addi $a1, $a1, -128         # move a1 to be the first item in the column that was moved
-beq $a1, $t6, return_move_down
-addi $a0, $a1, 0
-jal three_in_row
+# collision_loop:
+# addi $a1, $a1, -128         # move a1 to be the first item in the column that was moved
+# beq $a1, $t6, return_move_down
+# addi $a0, $a1, 0
+# jal three_in_row
 
-addi $a0, $a1, 0
-jal three_in_col
+# addi $a0, $a1, 0
+# jal three_in_col
 
-addi $a0, $a1, 0
-jal three_in_diagonal
+# addi $a0, $a1, 0
+# jal three_in_diagonal
 
-bne $a1, $t6, collision_loop
+# bne $a1, $t6, collision_loop
 
 return_move_down:
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 jr $ra
+
+##############################################################################
+# Code for drawing the game_board
+##############################################################################
+# $t0 = index variable for drawing loop, the offset from start of game_board array
+# $t1 = final value for the drawing loop
+# $t2 = location of colour in the game_board
+# $t3 = index variable for location being drawn to on the board
+# $t4 = value to check to see if the location variable should go to next row
+# $t9 = colour to write to board
+# $s0 = address for the display
+# $s3 = address for the game_board
+
+redraw_game_board:
+li $t0, 0            # make $t0 the offset from start of game_board
+li $t1, 360          # make $t1 the final offset of game_board
+add $t2, $s3, $t0       #address of the game_board
+addi $t3, $s0, 264          # make $s2 the address of the first location in the display to write
+
+drawing_board_loop:
+li $t4, 24                      # set $t4 to 24 (may have been changed by end)
+beq $t0, $t1, end_drawing_board_loop            # if we finish iterating through game_board
+
+lw $t9, 0($t2)                 # store colour at the correct place in game_board to $t9
+sw $t9, 0($t3)                  # paint colour on the board
+
+addi $t0, $t0, 4                # increment offset from start of game_board by 4
+add $t2, $s3, $t0                # increment address of game_board[offset]
+addi $t3, $t3, 4                  # increment to next pixel in array
+
+divu $t0, $t4                   # divide the offset by 24
+mfhi $t4                        # store remainder in $t4
+bne $t4, $zero, drawing_board_loop          # if not at edge (remainder not zero), continue loop
+addi $t3, $t3, 104              # else: move display to appropriate location at the start of new loop
+j drawing_board_loop
+
+
+end_drawing_board_loop:
+jr $ra
+
 
 
 ##############################################################################
