@@ -40,52 +40,69 @@ jal rect_draw               # calls rectangle drawing function.
 # initialize the drawing of the column
 draw_col:
 jal rand_column
-addi $s4, $s0, 528          # make $s4 point to final block of the column
+li $s4, 56           # $s4 = offset for the bottom of the column being moved on game_board
 
 game_loop:
 lw $s2, keyboardaddress 
 lw $t8, 0($s2)              # load first word from keyboard
 
-bne $t8, 1, final_state  # if first word 1 key is not pressed
+bne $t8, 1, redraw  # if first word 1 key is not pressed
 j keyboard_input
 
+collision_detection:
+addi $a0, $s4, -48            # make the argument for $a0 point to top of column just placed
+jal three_in_row
+jal three_in_col
+jal three_in_diagonal
 
-draw_new_col:
-addi $t8, $s0, 528                  # location where bottom of column should be placed
-lw $t6, 0($t8)                      # load $t6 with $t8 colour
-beq $t6, $zero, draw_col_at_top     # if it's zero (not occupied), then game is not lost, otherwise...
-lw $t9, 24($s1)                     # load t9 with white (draw impossible squares with white)
+addi $a0, $a0, 24          # make the argument for $a0 point to middle of column just placed
+jal three_in_row
+jal three_in_col
+jal three_in_diagonal
 
-addi $t8, $t8, -128                 # go to pixel above where column is supposed to be drawn
-lw $t6, 0($t8)                      # load $t6 with $t8 colour
-bne $t6, $zero, check_top            # if the column is black, paint with white
-sw $t9, 0($t8)
+addi $a0, $a0, 24          # make the argument for $a0 point to bottom  of column just placed
+jal three_in_row
+jal three_in_col
+jal three_in_diagonal
 
-check_top:
-addi $t8, $t8, -128                 # go two pixels above where column is supposed to be drawn
-lw $t6, 0($t8)                      # load $t6 with $t8 colour
-bne $t6, $zero, respond_to_Q        # if the column is black, paint with white
-sw $t9, 0($t8)
-j respond_to_Q
+j final_state               # if it reaches here, all of the collisions should be sorted out
 
-draw_col_at_top:
-jal rand_column
-addi $s4, $s0, 528
+check_collisions:
+jal redraw_game_board
+li $v0, 32          # pauses to look more natural when deleting the next rows
+li $a0, 100
+syscall
 
-# TODO: collision detection (final state check)
+li $t2, 0        # make t2 the pixel we want to look at
+li $t9, 360
+check_collisions_loop:
+beq $t2, $t9, final_state       # at end of array, therefore no more collisions, draw a new column
+
+addi $a0, $t2, 0          # make the argument for $a0 point to the pixel focused on
+jal three_in_row          # check for any new collisions
+jal three_in_col
+jal three_in_diagonal
+
+addi $t2, $t2, 4
+j check_collisions_loop
+
 final_state:
-addi $t2, $s0, 264
-addi $t3, $s0, 288
+addi $t2, $s3, 0
+addi $t3, $s3, 24
 
 check_top_row:
 addi $t2, $t2, 4
-beq $t2, $t3, sleep
-addi $t4, $s4, -256
-beq $t2, $t4, check_top_row
+beq $t2, $t3, draw_col_at_top
 lw $t9, 0($t2)
 bne $t9, $zero, respond_to_Q        # if the row is not black, then the game is lost
 j check_top_row
 
+draw_col_at_top:
+jal rand_column
+li $s4, 56
+
+redraw:
+jal redraw_game_board
 
 sleep:
 li $v0, 32
@@ -118,10 +135,17 @@ syscall
 # Code for responding to key press A
 ##############################################################################
 respond_to_A:
-addi $t6, $s4, -4           # value one left of s4
+li $t6, 24                      # load $t6 to be 24
+divu $s4, $t6                   # divide the offset by 24
+mfhi $t6                        # store remainder in $t6
+
+beq $t6, $zero, END_A           # if remainder is zero, end of column, don't move
+
+addi $t6, $s4, -4           # load into $t6 the value one left of s4
+add $t6, $s3, $t6           # get the value of s3 at t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
-bne $t6, $zero, END_A       # move until the next colour is not black (i.e. edge or another placed column)
+bne $t6, $zero, END_A       # if colour isn't black, stop moving
 
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store current $ra in stack
@@ -136,34 +160,39 @@ lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 END_A: 
-j final_state
+j redraw
 
 ##############################################################################
 # Code for responding to key press S
 ##############################################################################
 respond_to_S:
-addi $t6, $s4, 128          # value one row below t6
+add $t6, $s3, $s4           # t6 is the address of bottom of col
+addi $t6, $t6, 24           # value one row below t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
 addi $t8, $s4, 0
 
 MOVE_COL_DOWN_ENTIRELY:
+addi $t0, $s4, -356         # trying to determine if the value is at the final column
+bgtz $t0, END_S
 bne $t6, $zero, END_S       # move until the next colour is not black (i.e. edge or another placed column)
 
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store current $ra in stack
 
-addi $a0, $zero, 128         # set the amount to move the column by (down 1 row)
+addi $a0, $zero, 24         # set the amount to move the column by (down 1 row)
 addi $a1, $s4, 0
 jal redraw_column
 
-addi $s4, $s4, 128          # increment to next column value
-addi $t6, $s4, 128          # increment t6 to next column value
+addi $s4, $s4, 24           # increment to next column value
+add $t6, $s3, $s4           # t6 is the address of bottom of next col
+addi $t6, $t6, 24           # t6 is the address of bottom of next col
 lw $t6, 0($t6)              # load colour at t6 into t6
 
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
+jal redraw_game_board
 li $v0, 32                  # dropping animation
 li $a0, 8          
 syscall
@@ -171,45 +200,22 @@ syscall
 j MOVE_COL_DOWN_ENTIRELY
 
 END_S:
-# store return to stack
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $ra, 0($sp)          # store return
-
-addi $a0, $s4, -256            # make the argument for $a0 point to top of stack
-jal three_in_row
-jal three_in_col
-jal three_in_diagonal
-
-addi $a0, $a0, 128          # make the argument for $a0 point to middle of stack
-jal three_in_row
-jal three_in_col
-jal three_in_diagonal
-
-addi $a0, $a0, 128          # make the argument for $a0 point to bottom  of stack
-jal three_in_row
-jal three_in_col
-jal three_in_diagonal
-
-lw $ra, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-beq $t8, $s4, end_game_check
-j return_s
-
-end_game_check:
-addi $s4, $s4, -256     #top of s4
-lw $t6, 0($s4)
-bne $t6, $zero, respond_to_Q        # if top not zero, end game
-
-return_s:
-j draw_new_col
+j collision_detection
 
 
 ##############################################################################
 # Code for responding to key press D
 ##############################################################################
 respond_to_D:
-addi $t6, $s4, 4            # value one right of s4
+li $t6, 24                      # load $t6 to be 24
+addi $t4, $s4, -20              # subtract 20 from offset (to help check if right end of row)
+divu $t4, $t6                   # divide the offset by 24
+mfhi $t6                        # store remainder in $t6
+
+beq $t6, $zero, END_A           # if remainder is zero, end of column, don't move
+
+addi $t6, $s4, 4            # load into $t6 the value one right of s4
+add $t6, $s3, $t6           # get the value of s3 at t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
 bne $t6, $zero, END_D       # move until the next colour is not black (i.e. edge or another placed column)
@@ -227,46 +233,48 @@ lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 END_D:
-j final_state
+j redraw
 
 ##############################################################################
 # Code for responding to key press W
 ##############################################################################
 respond_to_W:
 
-lw $t9, 0($s4)          # get colour from bottom of col, store in t9
+add $t6, $s3, $s4      # make $t6 point to the address of bottom of row
+
+lw $t9, 0($t6)          # get colour from bottom of col, store in t9
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $t9, 0($sp)          # store colour
-addi $s4, $s4, -128     # go to next row in column 
+addi $t6, $t6, -24     # go to next row in column 
 
-lw $t9, 0($s4)          # get colour from middle of col, store in t9
+lw $t9, 0($t6)          # get colour from middle of col, store in t9
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $t9, 0($sp)          # store colour
-addi $s4, $s4, -128     # go to next row in column 
+addi $t6, $t6, -24     # go to next row in column 
 
-lw $t9, 0($s4)          # get colour from top of col, store in t9
+lw $t9, 0($t6)          # get colour from top of col, store in t9
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $t9, 0($sp)          # store colour
 
 # shift the colours
-addi $s4, $s4, 256          # go to bottom column
+addi $t6, $t6, 48          # go to bottom column
 
 lw $t9, 0($sp)              # pop top colour off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws top colour at bottom column
-addi $s4, $s4, -256         # go to top column
+sw $t9, 0($t6)              # draws top colour at bottom column
+addi $t6, $t6, -48         # go to top column
 
 lw $t9, 0($sp)              # pop middle colour off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws middle colour at top column
-addi $s4, $s4, 128          # go to middle column
+sw $t9, 0($t6)              # draws middle colour at top column
+addi $t6, $t6, 24          # go to middle column
 
 lw $t9, 0($sp)              # pop bottom colour off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-sw $t9, 0($s4)              # draws bottom colour at middle column
+sw $t9, 0($t6)              # draws bottom colour at middle column
 
-addi $s4, $s4, 128          # go to bottom column
-j final_state
+addi $t6, $t6, 24          # go to bottom column
+j redraw
 
 ##############################################################################
 # Code for random color column
@@ -278,13 +286,13 @@ j final_state
 rand_column:
 addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)              # push $ra to the stack for nested function
-addi $t2, $s0, 272          # add the horizontal - column 5 (4 x 4) and vertical - row 3 (128 x 2) offest to $s0
-addi $t4, $t2, 384          # calculate the postion of the last pixel in the column
+addi $t2, $s3, 8            # add the offset from game_board (for row 0, column 3 in the board) to $t2
+addi $t4, $s3, 80           # calculate the postion of the last pixel in the column 
 rand_column_loop:
 jal rand_color              # call rand_color to get a random color in $v0
 beq $t4, $t2, rand_column_loop_end # check if the current position is the end of the column, if so branch out of the loop
 sw $v0, 0($t2)              # draw pixel of color $v0 to location $t2
-addi $t2, $t2, 128          # Move to the next pixel in the column
+addi $t2, $t2, 24           # Move to the next pixel in the column
 j rand_column_loop          # Jump to the start of the loop
 rand_column_loop_end:
 lw $ra, 0($sp)              # pop $ra off the stack
@@ -309,7 +317,6 @@ add $t3, $t3, $s1           # color address = address of first color + offset
 lw $v0, 0($t3)              # load color into return value $v0
 jr $ra
 
-
 ##############################################################################
 # Code for getting the colours from the current column and adding colours to stack
 ##############################################################################
@@ -318,70 +325,81 @@ jr $ra
 # $t7 = colour of top pixel
 # $t9 = colour of current popped off pixel
 # $a0 = new location to draw column at
-# $a1 = location of bottom pixel of column
+# $a1 = offset location of bottom pixel of column
 
 redraw_column:
+add $a1, $s3, $a1       # make a1 point to the address of location of the bottom in the game_board array
 lw $t4, 0($a1)          # get colour from bottom of col, store in t4
-sw $zero, 0($a1)        #paint pixel black
-addi $a1, $a1, -128     # go to next row in column 
+sw $zero, 0($a1)        # paint pixel black
+addi $a1, $a1, -24     # go to next row in column 
 
-lw $t5, 0($a1)          #get colour from middle of col, store in t5
-sw $zero, 0($a1)        #paint pixel black
-addi $a1, $a1, -128     # go to next row in column 
+lw $t5, 0($a1)          # get colour from middle of col, store in t5
+sw $zero, 0($a1)        # paint pixel black
+addi $a1, $a1, -24      # go to next row in column 
 
-lw $t7, 0($a1)          #get colour from top of col, store in t7
-sw $zero, 0($a1)        #paint pixel black
+lw $t7, 0($a1)          # get colour from top of col, store in t7
+sw $zero, 0($a1)        # paint pixel black
 
 add $a1, $a1, $a0         # moves pixel by specified amount
 
 # draw at new $s4 location
 sw $t7, 0($a1)              # draws column pixel to the changed position
-addi $a1, $a1, 128          # go to next column
+addi $a1, $a1, 24           # go to next column
 
 sw $t5, 0($a1)              # draws column pixel to the left position
-addi $a1, $a1, 128          # go to next column
+addi $a1, $a1, 24           # go to next column
 
 sw $t4, 0($a1)              # draws column pixel to the left position
 
 jr $ra 
 
+
 ##############################################################################
 # Code for checking 3 in a row from pixel
 ##############################################################################
-# $a0 = pixel we start from
+# $a0 = offset of the pixel we start from
+# $t0 = location of the pixel we start from
 # $t1 = location of one in the row
 # $t3 = location of two in the row
 # $t4 = colour of one in the row
 # $t5 = colour of two in the row
-# $t7 = colour of a0
-# $t9 = colour of white
+# $t7 = colour at a0
+# $t8 = checking value
 
 three_in_row:
 # store return to stack
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
 
-addi $t0, $a0, 0
-lw $t7, 0($t0)
-
-lw $t9, 24($s1)
-beq $t7, $t9, return_checking_row      # if t7 is white, do an early return
+add $t0, $s3, $a0       # get to the location of the pixel we start from
+lw $t7, 0($t0)          # get colour of bottom of row
 
 beq $t7, $zero, return_checking_row      # if t7 is black, do an early return
 
+# two_left_order:
 # check the t1, t2, a0 order
-addi $t1, $t0, -8           # go two spots left
+li $t8, 24
+divu $a0, $t8               # see if at edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, two_right_order      # if t4 is at left end of board, go to the two right check
+
+addi $t3, $a0, -4           # go one offset spot left
+divu $t3, $t8               # see if at edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, one_left_one_right_order      # if t4 is one from left end of board, go to the one left one right check
+
+# else:
+addi $t1, $t0, -8           # go two offset spots left
 lw $t4, 0($t1)               # add colour to t4
 
-beq $t4, $t9, one_left_one_right_order      # if t4 is white, do an early return
-beq $t4, $zero, one_left_one_right_order      # if t4 is black, do an early return
+beq $t4, $zero, one_left_one_right_order      # if t4 is black, go to next case
 
 addi $t3, $t0, -4           # go one spot left
 lw $t5, 0($t3)               # add colour to t5
 
-beq $t5, $t9, one_left_one_right_order      # if t4 is white, do an early return
-beq $t5, $zero, one_left_one_right_order      # if t5 is black, do an early return
+beq $t5, $zero, two_right_order      # if t5 is black, go to two right check
 
+# this could possibly be the two_left order
 bne $t4, $t5, one_left_one_right_order          # if t4 != t5, go to next case
 bne $t7, $t4, one_left_one_right_order          # cond: t4 == t5, but t4 != t7, so go to next case
 
@@ -390,42 +408,38 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t3, 0($sp)          # store return
-
 addi $a1, $t1, 0
-jal move_down_and_check
+jal move_down
 
-lw $t3, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
 addi $a1, $t3, 0
-jal move_down_and_check
+jal move_down
 
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 one_left_one_right_order:
-lw $t9, 24($s1)
+
+# check if at left end of board:
+addi $t5, $a0, -20
+divu $t5, $t8               # see if at left edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, return_checking_row      # if t4 is from left end of board, early return
+
+divu $a0, $t8               # see if at edge of board
+mfhi $t4                 # save remainder in t4
+beq $t4, $zero, two_right_order      # if t4 is at left end of board, go to the one left one right check
+
 addi $t1, $t0, -4           # go one spot left
 lw $t4, 0($t1)               # add colour to t4
 
-beq $t4, $t9, two_right_order      # if t4 is white, do an early return
-beq $t4, $zero, two_right_order      # if t4 is black, do an early return
-
 addi $t3, $t0, 4           # go one spot right
 lw $t5, 0($t3)               # add colour to t5
-
-beq $t5, $t9, two_right_order      # if t4 is white, do an early return
-beq $t5, $zero, two_right_order      # if t4 is black, do an early return
+beq $t5, $zero, return_checking_row      # if t5 is black, do an early return
 
 bne $t4, $t5, two_right_order          # if t4 != t5, go to next case
 bne $t7, $t4, two_right_order          # cond: t4 == t5, but t4 != t7, so go to next case
@@ -435,44 +449,40 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t3, 0($sp)          # store return
-
 addi $a1, $t1, 0
-jal move_down_and_check
-
-lw $t3, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
-
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 two_right_order:
-lw $t9, 24($s1)
+# check if one from left end of board:
+addi $t1, $a0, 4           # go one spot left
+addi $t5, $t1, -20
+divu $t5, $t8               # see if at left edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, return_checking_row      # if t4 is one from left end of board, stop checking
+
+addi $t5, $a0, -20
+divu $t5, $t8               # see if at left edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, return_checking_row      # if t4 is at left end of board, stop checking
+
 addi $t1, $t0, 4           # go one spot left
 lw $t4, 0($t1)               # add colour to t4
-
-beq $t4, $t9, return_checking_row      # if t4 is white, do an early return
 beq $t4, $zero, return_checking_row      # if t4 is black, do an early return
 
 addi $t3, $t0, 8           # go two spots left
 lw $t5, 0($t3)           # add colour to t5
-
-beq $t5, $t9, return_checking_row      # if t4 is white, do an early return
-beq $t5, $zero, return_checking_row      # if t4 is black, do an early return
+beq $t5, $zero, return_checking_row      # if t5 is black, do an early return
 
 bne $t4, $t5, return_checking_row          # if t4 != t5, go to next case
 bne $t7, $t4, return_checking_row          # cond: t4 == t5, but t4 != t7, so go to next case
@@ -482,30 +492,19 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t3, 0($sp)          # store return
-
 addi $a1, $t1, 0
-jal move_down_and_check
-
-lw $t3, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
-
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 return_checking_row:
 lw $ra, 0($sp)              # pop $ra off the stack
@@ -518,35 +517,42 @@ jr $ra
 ##############################################################################
 # Code for checking 3 in a col from pixel
 ##############################################################################
-# $a0 = pixel we start from
-# $t0 = pixel to check
+# $a0 = pixel offset we start from
+# $t0 = pixel colour & address to check
 # t1 = location of one in the column
 # $t3 = location of two in the column
 # $t4 = colour of one in the column
 # $t5 = colour of two in the column
 # $t7 = colour of a0
-# $t9 = colour of white
+# $t8
 
 three_in_col:
 # store return to stack
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
 
-addi $t0, $a0, 0
-lw $t7, 0($t0)
+add $t0, $s3, $a0       # get to the location of the pixel we start from
+lw $t7, 0($t0)          # get colour of bottom of row
 
-lw $t9, 24($s1)
-beq $t7, $t9, return_checking_col      # if t7 is white, do an early return
-
-beq $t7, $zero, return_checking_col      # if t7 is black, do an early return
+beq $t7, $zero, return_checking_row      # if t7 is black, do an early return
 
 # check the t1, t2, a0 order
+# two_down_order:
+# check the t1, t2, a0 order
+addi $t4, $a0, -356         # trying to determine if the value is at the final row
+bgtz $t4, two_up_order      # if a0 bottom of board, check for two up columns
 
-addi $t1, $t0, 256           # go two spots down
+addi $t4, $a0, -332         # trying to determine if the value is at the second to final row
+bgtz $t4, one_up_one_down_order      # if at second to final of board, check for one up one down columns
+
+# else: two spots below available
+addi $t1, $t0, 48           # go two spots down
 lw $t4, 0($t1)               # add colour to t4
+beq $t4, $zero, one_up_one_down_order      # if t4 is black, check next case
 
-addi $t3, $t0, 128           # go one spot down
+addi $t3, $t0, 24           # go one spot down
 lw $t5, 0($t3)               # add colour to t5
+beq $t5, $zero, two_up_order      # if t5 is black, check next case
 
 bne $t4, $t5, one_up_one_down_order          # if t4 != t5, go to next case
 bne $t7, $t4, one_up_one_down_order          # cond: t4 == t5, but t4 != t7, so go to next case
@@ -557,20 +563,33 @@ sw $zero, 0($t1)
 sw $zero, 0($t3)
 
 addi $a1, $t1, 0
-jal move_down_and_check
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 one_up_one_down_order:
-addi $t1, $t0, -128           # go one spot up
-lw $t4, 0($t1)              # add colour to t4
+addi $t4, $a0, -24         # trying to determine if the value of a0 is at the top row
+bltz $t4, return_checking_col      # if a0 at top of board, early return (since next case is two above)
 
-addi $t3, $t0, 128           # go one spot down
+addi $t4, $a0, -356         # trying to determine if the value is at the final row
+bgtz $t4, two_up_order      # if a0 bottom of board, check for two up columns
+
+addi $t1, $t0, -24           # go one spot up
+lw $t4, 0($t1)              # add colour to t4
+beq $t4, $zero, two_up_order      # if t4 is black, go next case
+
+addi $t3, $t0, 24           # go one spot down
 lw $t5, 0($t3)               # add colour to t5
+beq $t5, $zero, two_up_order      # if t5 is black, go next case
 
 bne $t4, $t5, two_up_order          # if t4 != t5, go to next case
 bne $t7, $t4, two_up_order          # cond: t4 == t5, but t4 != t7, so go to next case
@@ -581,20 +600,33 @@ sw $zero, 0($t1)
 sw $zero, 0($t3)
 
 addi $a1, $t1, 0
-jal move_down_and_check
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 two_up_order:
-addi $t1, $t0, -128           # go one spot up
-lw $t4, 0($t1)               # add colour to t4
+addi $t4, $a0, -24         # trying to determine if the value of a0 is at the top row
+bltz $t4, return_checking_col      # if a0 at top of board, early return (since next case is two above)
 
-addi $t3, $t0, -256        # go two spots up
+addi $t4, $a0, -48         # trying to determine if the value of a0 is one below the top row
+bltz $t4, return_checking_col      # if a0 at top of board, early return (since next case is two above)
+
+addi $t1, $t0, -24           # go one spot up
+lw $t4, 0($t1)               # add colour to t4
+beq $t4, $zero, return_checking_col      # if t4 is black, do an early return
+
+addi $t3, $t0, -48        # go two spots up
 lw $t5, 0($t3)           # add colour to t5
+beq $t5, $zero, return_checking_col      # if t5 is black, do an early return
 
 bne $t4, $t5, return_checking_col          # if t4 != t5, go to next case
 bne $t7, $t4, return_checking_col          # cond: t4 == t5, but t4 != t7, so go to next case
@@ -605,13 +637,18 @@ sw $zero, 0($t1)
 sw $zero, 0($t3)
 
 addi $a1, $t1, 0
-jal move_down_and_check
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 return_checking_col:
 lw $ra, 0($sp)              # pop $ra off the stack
@@ -623,7 +660,7 @@ jr $ra
 
 
 ##############################################################################
-# Code for checking 3 in a col from pixel
+# Code for checking 3 in a diagonal from pixel
 ##############################################################################
 # $a0 = pixel we start from
 # $t0 = pixel to check
@@ -632,27 +669,41 @@ jr $ra
 # $t4 = colour of one in the column
 # $t5 = colour of two in the column
 # $t7 = colour of a0
-# $t9 = colour of white
+# $t8 = colour of white
 
 three_in_diagonal:
 # store return to stack
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
 
-addi $t0, $a0, 0
-lw $t7, 0($t0)
+add $t0, $s3, $a0       # get to the location of the pixel we start from
+lw $t7, 0($t0)          # get colour of bottom of row
 
-lw $t9, 24($s1)
-beq $t7, $t9, return_checking_col      # if t7 is white, do an early return
-
-beq $t7, $zero, return_checking_col      # if t7 is black, do an early return
+beq $t7, $zero, return_checking_row      # if t7 is black, do an early return
 
 # check the t1, t2, a0 order
+# check if at left right edges, then if there's enough space at the top
+li $t8, 24
+divu $a0, $t8               # see if at edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, negative_two_down_order      # if t4 is at left end of board, go to the two right check
 
-addi $t1, $t0, -264           # go two spots down
+addi $t3, $a0, -4           # go one offset spot left
+divu $t3, $t8               # see if at edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, negative_one_up_one_down_diagonal      # if t4 is one from left end of board, go to the one left one right check
+
+addi $t4, $a0, -24         # trying to determine if the value of a0 is at the top row
+bltz $t4, negative_two_down_order      # if a0 at top of board, next case
+
+addi $t4, $a0, -48         # trying to determine if the value of a0 is one below the top row
+bltz $t4, negative_one_up_one_down_diagonal      # if a0 at top of board, next case
+
+# therefore t1, t3 are valid indices
+addi $t1, $t0, -56           # go two spots up
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $t0, -132           # go one spot down
+addi $t3, $t0, -28           # go one spot up
 lw $t5, 0($t3)               # add colour to t5
 
 bne $t4, $t5, negative_one_up_one_down_diagonal          # if t4 != t5, go to next case
@@ -663,36 +714,42 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t3, 0($sp)          # store return
-
 addi $a1, $t1, 0
-jal move_down_and_check
-
-lw $t3, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
-
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 negative_one_up_one_down_diagonal:
-addi $t1, $t0, -132           # go one spot up
+# check if at left right edges, then if there's enough space at the top
+divu $a0, $t8               # see if at left edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, negative_two_down_order      # if t4 is at left end of board, go to the two right check
+
+addi $t5, $a0, -20
+divu $t5, $t8               # see if at right edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, pos_two_down_order      # if t4 is at right end of board, go to two down check
+
+addi $t4, $a0, -24         # trying to determine if the value of a0 is at the top row
+bltz $t4, negative_two_down_order      # if a0 at top of board, next case
+
+addi $t4, $a0, -356         # trying to determine if the value is at the final row
+bgtz $t4, pos_two_up_order      # if a0 bottom of board, check for two up columns
+
+# else: valid indices
+addi $t1, $t0, -28           # go one spot up
 lw $t4, 0($t1)              # add colour to t4
 
-addi $t3, $t0, 132           # go one spot down
+addi $t3, $t0, 28           # go one spot down
 lw $t5, 0($t3)               # add colour to t5
 
 bne $t4, $t5, negative_two_down_order          # if t4 != t5, go to next case
@@ -703,36 +760,43 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t3, 0($sp)          # store return
-
 addi $a1, $t1, 0
-jal move_down_and_check
-
-lw $t3, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
-
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 negative_two_down_order:
-addi $t1, $t0, 132           # go one spot up
+addi $t1, $a0, 4           # go one spot left
+addi $t5, $t1, -20
+divu $t5, $t8               # see if one from right edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, pos_up_down_order      # if t4 is one from left end of board, stop checking
+
+addi $t5, $a0, -20
+divu $t5, $t8               # see if at left edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, pos_two_down_order      # if t4 is at left end of board, stop checking
+
+addi $t4, $a0, -356         # trying to determine if the value is at the final row
+bgtz $t4, pos_two_up_order      # if a0 bottom of board, check for two up columns
+
+addi $t4, $a0, -332         # trying to determine if the value is at the second to final row
+bgtz $t4, pos_two_up_order      # if at second to final of board, check for one up one down columns
+
+# now we can check valid indices
+addi $t1, $t0, 28            # go one spot down
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $t0, 264        # go two spots up
+addi $t3, $t0, 56        # go two spots down
 lw $t5, 0($t3)           # add colour to t5
 
 bne $t4, $t5, pos_two_up_order          # if t4 != t5, go to next case
@@ -743,36 +807,42 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t3, 0($sp)          # store return
-
 addi $a1, $t1, 0
-jal move_down_and_check
-
-lw $t3, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
-
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 pos_two_up_order:
-addi $t1, $t0, -124           # go one spot up
+addi $t1, $a0, 4           # go one spot left
+addi $t5, $t1, -20
+divu $t5, $t8               # see if one from right edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, pos_up_down_order      # if t4 is one from left end of board, stop checking
+
+addi $t5, $a0, -20
+divu $t5, $t8               # see if at left edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, pos_two_down_order      # if t4 is at left end of board, stop checking
+
+addi $t4, $a0, -24         # trying to determine if the value of a0 is at the top row
+bltz $t4, pos_two_down_order      # if a0 at top of board, next case
+
+addi $t4, $a0, -48         # trying to determine if the value of a0 is one below the top row
+bltz $t4, pos_up_down_order      # if a0 at top of board, next case
+
+addi $t1, $t0, -20           # go one spot up
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $t0, -248        # go two spots up
+addi $t3, $t0, -40       # go two spots up
 lw $t5, 0($t3)           # add colour to t5
 
 bne $t4, $t5, pos_up_down_order          # if t4 != t5, go to next case
@@ -783,36 +853,42 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t3, 0($sp)          # store return
-
 addi $a1, $t1, 0
-jal move_down_and_check
-
-lw $t3, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
-
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 pos_up_down_order:
-addi $t1, $t0, -124           # go one spot up
+# check if at left right edges, then if there's enough space at the top
+divu $a0, $t8               # see if at left edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, return_checking_diagonal      # if t4 is at left end of board, return
+
+addi $t5, $a0, -20
+divu $t5, $t8               # see if at right edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, pos_two_down_order      # if t4 is at right end of board, go to two down check
+
+addi $t4, $a0, -24         # trying to determine if the value of a0 is at the top row
+bltz $t4, pos_two_down_order      # if a0 at top of board, next case
+
+addi $t4, $a0, -356         # trying to determine if the value is at the final row
+bgtz $t4, return_checking_diagonal      # if a0 bottom of board, early return
+
+# else: valid indices
+addi $t1, $t0, -20           # go one spot up
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $t0, 124        # go two spots up
+addi $t3, $t0, 20        # go one spots down
 lw $t5, 0($t3)           # add colour to t5
 
 bne $t4, $t5, pos_two_down_order          # if t4 != t5, go to next case
@@ -823,37 +899,40 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t3, 0($sp)          # store return
-
 addi $a1, $t1, 0
-jal move_down_and_check
-
-lw $t3, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
-
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
 
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 pos_two_down_order:
-addi $t1, $t0, 124           # go one spot up
+divu $a0, $t8               # see if at edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, return_checking_diagonal      # if t4 is at left end of board, go to the two right check
+
+addi $t3, $a0, -4           # go one offset spot left
+divu $t3, $t8               # see if at edge of board
+mfhi $t4                    # save remainder in t4
+beq $t4, $zero, return_checking_diagonal      # if t4 is one from left end of board, go to the one left one right check
+
+addi $t4, $a0, -356         # trying to determine if the value is at the final row
+bgtz $t4, return_checking_diagonal      # if a0 bottom of board, check for two up columns
+
+addi $t4, $a0, -332         # trying to determine if the value is at the second to final row
+bgtz $t4, return_checking_diagonal      # if at second to final of board, check for one up one down columns
+
+addi $t1, $t0, 20           # go one spot up
 lw $t4, 0($t1)               # add colour to t4
 
-addi $t3, $t0, 248        # go two spots up
+addi $t3, $t0, 40        # go two spots up
 lw $t5, 0($t3)           # add colour to t5
 
 bne $t4, $t5, return_checking_diagonal          # if t4 != t5, go to next case
@@ -864,30 +943,19 @@ sw $zero, 0($t0)
 sw $zero, 0($t1)
 sw $zero, 0($t3)
 
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t3, 0($sp)          # store return
-
 addi $a1, $t1, 0
-jal move_down_and_check
-
-lw $t3, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t0, 0($sp)          # store return
+jal move_down
 
 addi $a1, $t3, 0
-jal move_down_and_check
-
-lw $t0, 0($sp)              # pop $ra off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jal move_down
 
 addi $a1, $t0, 0
-jal move_down_and_check
+jal move_down
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+j check_collisions          # check for any additional collisions created by new order on the game_board
 
 return_checking_diagonal:
 lw $ra, 0($sp)              # pop $ra off the stack
@@ -895,192 +963,106 @@ addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
 jr $ra
 
-
 ##############################################################################
-# Code for moving down a column and checking collisions
+# Code for moving down a column
 ##############################################################################
 # $a1 = position of pixel which was deleted
 # $t2 = 
 # $t6 =
 # $t9 = colour of pixel
 
-move_down_and_check:
+move_down:
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)          # store return
-lw $t2, 24($s1)         # make t2 white
+sub $t2, $a1, $s3       # find offset
 
-addi $t6, $a1, -128     # move to possible start of floating column with a1
+addi $t2, $t2, -24
+bltz $t2, return_checking_row               # if t2 is in the top row, then this is not the pixel meant to move down the column
+
+addi $t6, $a1, -24     # move to possible start of floating column with a1
 lw $t9, 0($t6)          # get colour at t6
 beq $t9, $zero, return_checking_col         # if the space above a1 is black, then this is not the pixel meant to move down the column
-beq $t9, $t2, return_checking_col           # if the space above a1 is white, then this is not the pixel meant to move down the column
 
 # find location of first black/white at the top of the column
 find_top:
+addi $t6, $t6, -24
+addi $t2, $t2, -24
+bltz $t2, move_down_columns      # if top row
+
 lw $t9, 0($t6)
 beq $t9, $zero, move_down_columns
-beq $t9, $t2, move_down_columns
-addi $t6, $t6, -128
 j find_top
 
 move_down_columns:
+sub $t9, $a1, $s3       # find offset
+addi $t9, $t9, -356     # find subtraction
+bgtz $t9, return_move_down      # then we're at the end of the board, return
 lw $t9, 0($a1)
-bne $t9, $zero, check_new_collisions
-addi $t2, $a1, -128         # move t2 to be the colour above empty space a1
+bne $t9, $zero, return_move_down
+addi $t2, $a1, -24         # move t2 to be the colour above empty space a1
 lw $t9, 0($t2)              # store colour in t9
 sw $t9, 0($a1)              # paint empty space with a1 colour
 
 move_column_inner_loop:
 sw $zero, 0($t2)            # paint empty space black
-addi $t2, $t2, -128         # move t2 to be the colour above empty space
+addi $t2, $t2, -24         # move t2 to be the colour above empty space
 beq $t2, $t6, move_column_inner_loop_end
 lw $t9, 0($t2)              # store colour in t9
 
-addi $t2, $t2, 128         # move t2 to be the empty space
+addi $t2, $t2, 24         # move t2 to be the empty space
 sw $t9, 0($t2)          # paint empty space with above colour
 
-addi $t2, $t2, -128         # move t2 to next above space
+addi $t2, $t2, -24         # move t2 to next above space
 j move_column_inner_loop
 
 move_column_inner_loop_end:
-addi $a1, $a1, 128
-addi $t6, $t6, 128
+addi $a1, $a1, 24
+addi $t6, $t6, 24
+
 j move_down_columns
-
-check_new_collisions:
-
-collision_loop:
-addi $a1, $a1, -128         # move a1 to be the first item in the column that was moved
-beq $a1, $t6, return_move_down
-addi $a0, $a1, 0
-jal three_in_row
-
-addi $a0, $a1, 0
-jal three_in_col
-
-addi $a0, $a1, 0
-jal three_in_diagonal
-
-bne $a1, $t6, collision_loop
 
 return_move_down:
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 jr $ra
 
-
 ##############################################################################
-# Code for calculating 3 in a row
+# Code for drawing the game_board
 ##############################################################################
+# $t0 = index variable for drawing loop, the offset from start of game_board array
+# $t1 = final value for the drawing loop
+# $t2 = location of colour in the game_board
+# $t3 = index variable for location being drawn to on the board
+# $t4 = value to check to see if the location variable should go to next row
+# $t9 = colour to write to board
 # $s0 = address for the display
 # $s3 = address for the game_board
-# $s4 = address for the bottom pixel of the newest column
-# $t0 = left bound
-# $t1 = right bound
-# $t2 = row of bottom pixel of the newest pixel
-# $t3 = original column of the bottom pixel of the newest pixel
-# $t4 = color of the pixel
-# $t6 = address of starting pixel in the game_board
 
-remove_match_3:
-addi $sp, $sp, -4
-sw $ra, 0($sp)
+redraw_game_board:
+li $t0, 0            # make $t0 the offset from start of game_board
+li $t1, 360          # make $t1 the final offset of game_board
+add $t2, $s3, $t0       #address of the game_board
+addi $t3, $s0, 264          # make $s2 the address of the first location in the display to write
 
-lw $t4, 0($s4)              # Take the color of the last pixel of newest column
+drawing_board_loop:
+li $t4, 24                      # set $t4 to 24 (may have been changed by end)
+beq $t0, $t1, end_drawing_board_loop            # if we finish iterating through game_board
 
-# calculating index of the pixel
-sub $t5, $s4, $s0           # $t5 refers to pixel position from display base
-add $t5, $t5, -264          # now $t5 refers to the position without the edges of grid
-srl $t2, $t5, 7             # $ t2 = row = offset / 128
-                            # $t3 = col = (offset % 128) / 4
+lw $t9, 0($t2)                 # store colour at the correct place in game_board to $t9
+sw $t9, 0($t3)                  # paint colour on the board
 
-andi $t3, $t5, 127          # offset % 128
-srl $t3, $t3, 2             # divide by 4
+addi $t0, $t0, 4                # increment offset from start of game_board by 4
+add $t2, $s3, $t0                # increment address of game_board[offset]
+addi $t3, $t3, 4                  # increment to next pixel in array
 
-li $t6, 6
-mul $t5, $t2, $t6           # row * 6
-add $t5, $t5, $t3           # + col
-sll $t5, $t5, 2             # *4 (word size)
-add $t6, $s3, $t5           # $t6 refers to location of game_board[bottom pixel placed]
-# find the left bound of matches
-move $t0, $t3
-find_left:
-addi $t1, $t0, -1           # $t0 is the column to the left of $t3
-bltz $t1, left_done         # if $t0 is less than zero then $t3 is the left most pixel, jumpt to left_done
+divu $t0, $t4                   # divide the offset by 24
+mfhi $t4                        # store remainder in $t4
+bne $t4, $zero, drawing_board_loop          # if not at edge (remainder not zero), continue loop
+addi $t3, $t3, 104              # else: move display to appropriate location at the start of new loop
+j drawing_board_loop
 
-li $t6, 6
-mul $t5, $t2, $t6           # row * 6
-add $t5, $t5, $t1           # + col
-sll $t5, $t5, 2             # *4 (word size)
-add $t5, $s3, $t5           # $t5 refers to location of game_board[pixel to the left]
 
-lw $t7, 0($t5)              # load the color of the left pixel to $t7
-bne $t7, $t4, left_done     # compare the pixel colours 
-
-move $t0, $t1               # make the left pixel the current pixel
-j find_left
-left_done:
-
-# find the right bound
-move $t1, $t3               # right bound = col
-find_right:
-addi $t5, $t1, 1            # $t5 is the column to the right of $t3
-li $t9, 6                   # INDEXING ISSUE HERE?
-bge $t5, $t9, right_done    # check if the $t3 is the right most pixel
-
-li $t6, 6
-mul $t8, $t2, $t6           # row * 6
-add $t8, $t8, $t5           # + col
-sll $t8, $t8, 2             # *4 (word size)
-add $t8, $s3, $t8           # $t8 refers to location of game_board[pixel to the left]
-
-lw $t7, 0($t8)              # color at the right pixel
-bne $t7, $t4, right_done    # if the colors don't match break out of loop
-
-move $t1, $t5
-j find_right
-right_done:
-
-# clear from left to right
-sub $t5, $t1, $t0           # right bound - left bound
-addi $t5, $t5, 1
-
-li $t9, 3
-blt $t5, $t9, end_remove      # check if the match section is 3 or greater
-move $t5, $t0   # start col
-clear_loop:
-bgt $t5, $t1, end_remove
-
-# calculate pixel position in game_board
-li $t6, 6
-mul $t7, $t2, $t6           # row * 6
-add $t7, $t7, $t5           # + col
-sll $t7, $t7, 2             # *4 (word size)
-add $t7, $s3, $t7           
-
-sw $zero, 0($t7)   # clear gem in game_board
-
-# calculate pixel position on screen
-
-# vertical offset = (row + 2) * 128
-addi $t7, $t2, 2            # add the two boarder rows
-sll $t7, $t7, 7             # multiply by 128
-# horizontal offset = (column + 2) * 4
-addi $t8, $t5, 2            # add two boarder columns           
-sll $t8, $t8, 2             # multiply by 4
-add $t7, $t7, $s0           # add vertical offset to $s0
-add $t7, $t8, $t7           # add horizontal offset to vertical offset
-
-sw $zero, 0($t7)            # clear gem on screen
-
-addi $t5, $t5, 1
-
-# TODO drop gems above
-j clear_loop
-
-##################################
-end_remove:
-lw $ra, 0($sp)
-addi $sp, $sp, 4
+end_drawing_board_loop:
 jr $ra
 
 ##############################################################################
