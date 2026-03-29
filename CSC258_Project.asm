@@ -83,13 +83,27 @@ jr $ra
 # Code for responding to key press Q
 ##############################################################################
 respond_to_Q:
-li $v0, 10                  # terminate the program gracefully
+li $v0, 33                  # Service code 33 for synchronous MIDI note 
+li $a0, 30                  # Pitch (Middle C) 
+li $a1, 2000                 # Duration (500ms) 
+li $a2, 0                   # Instrument (e.g., Acoustic Grand Piano) 
+li $a3, 100                 # Volume
+syscall                     # Play the note
+
+li $v0, 10  # terminate the program gracefully
 syscall
 
 ##############################################################################
 # Code for responding to key press A
 ##############################################################################
 respond_to_A:
+li $v0, 31                  # Service code 31 for asynchronous MIDI note 
+li $a0, 45                  # Pitch
+li $a1, 100                 # Duration
+li $a2, 2                   # Instrument
+li $a3, 100                 # Volume
+syscall                     # Play the note
+
 addi $t6, $s4, -4           # value one left of s4
 lw $t6, 0($t6)              # load colour at t6 into t6
 
@@ -114,6 +128,14 @@ j redraw
 # Code for responding to key press S
 ##############################################################################
 respond_to_S:
+li $v0, 31                  # Service code 31 for asynchronous MIDI note 
+li $a0, 30                  # Pitch
+li $a1, 100                 # Duration
+li $a2, 2                   # Instrument
+li $a3, 100                 # Volume
+syscall                     # Play the note
+
+
 addi $t6, $s4, 128          # value one row below t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
@@ -174,6 +196,13 @@ j draw_new_col
 # Code for responding to key press D
 ##############################################################################
 respond_to_D:
+li $v0, 31                  # Service code 31 for asynchronous MIDI note 
+li $a0, 45                  # Pitch
+li $a1, 100                 # Duration
+li $a2, 2                   # Instrument
+li $a3, 100                 # Volume
+syscall                     # Play the note
+
 addi $t6, $s4, 4            # value one right of s4
 lw $t6, 0($t6)              # load colour at t6 into t6
 
@@ -198,6 +227,12 @@ j redraw
 # Code for responding to key press W
 ##############################################################################
 respond_to_W:
+li $v0, 31                  # Service code 31 for asynchronous MIDI note 
+li $a0, 35                  # Pitch 
+li $a1, 100                 # Duration (500ms) 
+li $a2, 2                   # Instrument (e.g., Acoustic Grand Piano) 
+li $a3, 100                 # Volume
+syscall                     # Play the note
 
 lw $t9, 0($s4)          # get colour from bottom of col, store in t9
 addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
@@ -232,7 +267,6 @@ sw $t9, 0($s4)              # draws bottom colour at middle column
 
 addi $s4, $s4, 128          # go to bottom column
 j redraw
-
 ##############################################################################
 # Code for random color column
 ##############################################################################
