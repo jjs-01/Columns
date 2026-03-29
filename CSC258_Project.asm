@@ -42,6 +42,9 @@ draw_col:
 jal rand_column
 li $s4, 56           # $s4 = offset for the bottom of the column being moved on game_board
 
+# s4 = current score
+# s5 = number of frames
+li $s5, 0
 game_loop:
 lw $s2, keyboardaddress 
 lw $t8, 0($s2)              # load first word from keyboard
@@ -100,8 +103,20 @@ j check_top_row
 draw_col_at_top:
 jal rand_column
 li $s4, 56
+li $s5, 0
 
 redraw:
+# checks whether to add gravity
+addi $s5, $s5, 1
+li $t2, 64
+divu $s5, $t2
+mfhi $t6
+bne $t6, $zero, refresh_board
+li $s5, 0
+jal gravity_to_column
+addi $s4, $s4, 24
+
+refresh_board:
 jal redraw_game_board
 
 sleep:
@@ -315,6 +330,31 @@ syscall                     # random integer stored in $a0
 sll $t3, $a0, 2             # multiply index by 4 (word size)
 add $t3, $t3, $s1           # color address = address of first color + offset
 lw $v0, 0($t3)              # load color into return value $v0
+jr $ra
+
+##############################################################################
+# Code for moving the column down by one
+##############################################################################
+# $s4 = offset of the bottom of the column
+
+gravity_to_column:
+add $t0, $s4, $s3      # get the pixel value of the colour
+add $t0, $t0, 24      # get the pixel value of the colour
+lw $t9, 0($t0)         # put colour of t0 into t9
+bne $t9, $zero, check_collisions
+
+addi $t0, $s4, -356         # trying to determine if the value is at the final column
+bgtz $t0, draw_col_at_top
+
+addi $sp, $sp, -4       # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)          # store return
+
+addi $a0, $zero, 24         # set the amount to move the column by (down 1 row)
+addi $a1, $s4, 0
+jal redraw_column
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 jr $ra
 
 ##############################################################################
