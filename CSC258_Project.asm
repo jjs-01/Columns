@@ -943,10 +943,10 @@ beq $t7, $zero, return_checking_row      # if t7 is black, do an early return
 # check the t1, t2, a0 order
 # two_down_order:
 # check the t1, t2, a0 order
-addi $t4, $a0, -356         # trying to determine if the value is at the final row
+addi $t4, $a0, -332         # trying to determine if the value is at the final row
 bgtz $t4, two_up_order      # if a0 bottom of board, check for two up columns
 
-addi $t4, $a0, -332         # trying to determine if the value is at the second to final row
+addi $t4, $a0, -306         # trying to determine if the value is at the second to final row
 bgtz $t4, one_up_one_down_order      # if at second to final of board, check for one up one down columns
 
 # else: two spots below available
@@ -984,7 +984,7 @@ one_up_one_down_order:
 addi $t4, $a0, -24         # trying to determine if the value of a0 is at the top row
 bltz $t4, return_checking_col      # if a0 at top of board, early return (since next case is two above)
 
-addi $t4, $a0, -356         # trying to determine if the value is at the final row
+addi $t4, $a0, -332         # trying to determine if the value is at the final row
 bgtz $t4, two_up_order      # if a0 bottom of board, check for two up columns
 
 addi $t1, $t0, -24           # go one spot up
@@ -1146,7 +1146,7 @@ beq $t4, $zero, pos_two_down_order      # if t4 is at right end of board, go to 
 addi $t4, $a0, -24         # trying to determine if the value of a0 is at the top row
 bltz $t4, negative_two_down_order      # if a0 at top of board, next case
 
-addi $t4, $a0, -356         # trying to determine if the value is at the final row
+addi $t4, $a0, -332         # trying to determine if the value is at the final row
 bgtz $t4, pos_two_up_order      # if a0 bottom of board, check for two up columns
 
 # else: valid indices
@@ -1190,10 +1190,10 @@ divu $t5, $t8               # see if at left edge of board
 mfhi $t4                    # save remainder in t4
 beq $t4, $zero, pos_two_down_order      # if t4 is at left end of board, stop checking
 
-addi $t4, $a0, -356         # trying to determine if the value is at the final row
+addi $t4, $a0, -332         # trying to determine if the value is at the final row
 bgtz $t4, pos_two_up_order      # if a0 bottom of board, check for two up columns
 
-addi $t4, $a0, -332         # trying to determine if the value is at the second to final row
+addi $t4, $a0, -306         # trying to determine if the value is at the second to final row
 bgtz $t4, pos_two_up_order      # if at second to final of board, check for one up one down columns
 
 # now we can check valid indices
@@ -1285,7 +1285,7 @@ beq $t4, $zero, pos_two_down_order      # if t4 is at right end of board, go to 
 addi $t4, $a0, -24         # trying to determine if the value of a0 is at the top row
 bltz $t4, pos_two_down_order      # if a0 at top of board, next case
 
-addi $t4, $a0, -356         # trying to determine if the value is at the final row
+addi $t4, $a0, -332         # trying to determine if the value is at the final row
 bgtz $t4, return_checking_diagonal      # if a0 bottom of board, early return
 
 # else: valid indices
@@ -1327,10 +1327,10 @@ divu $t3, $t8               # see if at edge of board
 mfhi $t4                    # save remainder in t4
 beq $t4, $zero, return_checking_diagonal      # if t4 is one from left end of board, go to the one left one right check
 
-addi $t4, $a0, -356         # trying to determine if the value is at the final row
+addi $t4, $a0, -332         # trying to determine if the value is at the final row
 bgtz $t4, return_checking_diagonal      # if a0 bottom of board, check for two up columns
 
-addi $t4, $a0, -332         # trying to determine if the value is at the second to final row
+addi $t4, $a0, -306         # trying to determine if the value is at the second to final row
 bgtz $t4, return_checking_diagonal      # if at second to final of board, check for one up one down columns
 
 addi $t1, $t0, 20           # go one spot up
