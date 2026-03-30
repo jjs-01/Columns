@@ -3,8 +3,11 @@ ADDR_DSPL: .word 0x10008000
 colors: .word 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xf28c28, 0xff00ff, 0xffffff   # red, green, blue, yellow, orange, magenta, white
 keyboardaddress: .word 0xffff0000
 game_board: .space 360
-# time count to count every game_loop up to a certain gravity time, number of blocks placed placements, difficulty (0 = easy, 1 = medium, 3 = hard)
-game_info: .word 0, 0, 0
+# timer to count when to drop down one more block, number of blocks placed placements, difficulty (0 = easy, 1 = medium, 3 = hard), gravity speed, 
+# timer for gravity speed increase
+game_info: .word 0, 0, 0, 64, 0
+curr_column_colours: .space 12
+next_five_columns: .space 60
 
 
 ##############################################################################
@@ -23,7 +26,15 @@ la $s1, colors              # $s1 = address for the first color
 lw $s2, keyboardaddress     # $s2 = address for the keyboard
 la $s3, game_board          # $s3 = address for game_board
 la $s5, game_info           # $s5 = info for the game (which fields represent which above)
+la $s6, curr_column_colours # $s6 = current moving column colours
 
+select_mode:
+
+game_over_screen:
+
+paused_screen:
+
+draw_game_play:
 # initialize the drawing of white game area rectangle
 addi $a0, $zero, 1          # set the X coordinate
 addi $a1, $zero, 1          # set the Y coordinate
@@ -45,6 +56,7 @@ draw_col:
 jal rand_column
 li $s4, 56           # $s4 = offset for the bottom of the column being moved on game_board
 
+# main loop for the game
 game_loop:
 lw $s2, keyboardaddress 
 lw $t8, 0($s2)              # load first word from keyboard
@@ -75,6 +87,15 @@ jal redraw_game_board
 li $v0, 32          # pauses to look more natural when deleting the next rows
 li $a0, 250
 syscall
+
+lw $t2, 4($s5)
+addi $t2, $t2, 1
+sw $t2, 4($s5)
+
+lw $t2, 12($s5)
+li $v0, 1            # Service code 4 = Print String
+addi $a0, $t2, 0     # Load address of the string
+syscall               # Make the system call
 
 li $t2, 0        # make t2 the pixel we want to look at
 li $t9, 360
@@ -107,15 +128,22 @@ sw $zero, 0($s5)        # resets clock tick
 
 redraw:
 # checks whether to add gravity
-lw $t1, 0($s5)
-addi $t1, $t1, 1
+lw $t1, 16($s5)       # load increase speed timer
+addi $t1, $t1, 1      # add one
+sw $t1, 16($s5)        # save incremented value
+
+lw $t1, 0($s5)        # load drop down by gravity timer
+addi $t1, $t1, 1      # add one
 sw $t1, 0($s5)        # save incremented value
-li $t2, 64
-divu $t1, $t2
-mfhi $t6
-bne $t6, $zero, refresh_board
+
+jal find_speed        # determine what 12($s5) should be based on number of matches to find speed
+
+lw $t2, 12($s5)       # load gravity speed
+divu $t1, $t2         # divide current gravity decrease time / speed
+mfhi $t2              # store remainder
+bne $t2, $zero, refresh_board       # if a second hasn't passed, just continue
 sw $zero, 0($s5)        # resets clock tick 
-jal gravity_to_column
+jal gravity_to_column               # adds to gravity
 
 refresh_board:
 jal redraw_game_board
@@ -289,6 +317,36 @@ sw $t9, 0($t6)              # draws bottom colour at middle column
 
 addi $t6, $t6, 24          # go to bottom column
 j redraw
+
+##############################################################################
+# Code for finding gravity speed
+##############################################################################
+# $s5 = info about the game
+# $t2 = number of matches found / current speed (value of interest in s5)
+# $t3 = value to divide by
+# $t4 = checking value for decreasing
+
+find_speed:
+lw $t2, 16($s5)
+li $t3, 2810
+divu $t2, $t3
+mfhi $t3        # store remainder of game_info[1] = counter of speed increase time / 15
+beq $t3, $zero, increase_speed_check        # if around 45 seconds have passed, increase speed
+jr $ra      # if the remainder is not 0, not at the value where it needs to increase
+
+increase_speed_check:
+sw $zero, 16($s5)       # reset timer for speed
+
+lw $t2, 12($s5)
+addi $t4, $t2, -16
+bgtz $t4, increase_speed        # speed is maximum 4 drops times a second
+jr $ra
+
+increase_speed:
+addi $t3, $t2, -12    # subtract 2 from speed
+sw $t3, 12($s5)      # update s5 to faster speed
+
+jr $ra
 
 ##############################################################################
 # Code for random color column
