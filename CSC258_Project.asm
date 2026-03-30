@@ -7,7 +7,6 @@ game_board: .space 360
 # timer for gravity speed increase, lowest possible gravity speed
 game_info: .word 0, 0, 0, 64, 0, 24
 curr_column_colours: .space 12
-next_five_columns: .space 60
 
 
 ##############################################################################
@@ -29,6 +28,14 @@ la $s5, game_info           # $s5 = info for the game (which fields represent wh
 la $s6, curr_column_colours # $s6 = current moving column colours
 
 select_mode:
+# erase any existing screen
+addi $a0, $zero, 0          # set the X coordinate
+addi $a1, $zero, 0          # set the Y coordinate
+addi $a2, $zero, 32          # set the width of the rectangle (6 + 2)
+addi $a3, $zero, 32         # set the height of the rectangle (15 + 2)
+add $t9, $zero $zero             # loads white from colors
+jal rect_draw               # calls rectangle drawing function.
+
 lw $t9, 24($s1)             # loads white from colors
 
 # FIRST WORD: SELECT
@@ -109,16 +116,86 @@ addi $a0, $zero, 18          # set the X coordinate
 addi $a1, $zero, 23          # set the Y coordinate
 jal draw_3               # calls appropriate letter drawing function
 
+######
+# Selecting difficulty option
+#####
 select_mode_loop:
 lw $s2, keyboardaddress 
 lw $t8, 0($s2)              # load first word from keyboard
 
-bne $t8, 1, select_mode_loop  # if first word 1 key is not pressed
-j keyboard_choose_level_input
+beq $t8, 1, keyboard_choose_level_input  # if first word 1 key is not pressed
+
+li $v0, 32
+li $a0, 16
+syscall
+j select_mode_loop
+
 
 game_over_screen:
+lw $t9, 24($s1)             # loads white from colors
 
-paused_screen:
+# FIRST WORD: GAME
+addi $a0, $zero, 1          # set the X coordinate
+addi $a1, $zero, 19          # set the Y coordinate
+jal draw_G               # calls appropriate letter drawing function
+
+addi $a0, $zero, 6          # set the X coordinate
+addi $a1, $zero, 19          # set the Y coordinate
+jal draw_A               # calls appropriate letter drawing function
+
+addi $a0, $zero, 10          # set the X coordinate
+addi $a1, $zero, 19          # set the Y coordinate
+jal draw_M               # calls appropriate letter drawing function
+
+addi $a0, $zero, 16          # set the X coordinate
+addi $a1, $zero, 19          # set the Y coordinate
+jal draw_E               # calls appropriate letter drawing function
+
+# SECOND WORD: OVER
+addi $a0, $zero, 1          # set the X coordinate
+addi $a1, $zero, 25          # set the Y coordinate
+jal draw_O               # calls appropriate letter drawing function
+
+addi $a0, $zero, 5          # set the X coordinate
+addi $a1, $zero, 25          # set the Y coordinate
+jal draw_V               # calls appropriate letter drawing function
+
+addi $a0, $zero, 9          # set the X coordinate
+addi $a1, $zero, 25          # set the Y coordinate
+jal draw_E               # calls appropriate letter drawing function
+
+addi $a0, $zero, 13          # set the X coordinate
+addi $a1, $zero, 25          # set the Y coordinate
+jal draw_R               # calls appropriate letter drawing function
+
+# R OR q (down the side)
+addi $a0, $zero, 23          # set the X coordinate
+addi $a1, $zero, 13          # set the Y coordinate
+jal draw_R               # calls appropriate letter drawing function
+
+addi $a0, $zero, 23          # set the X coordinate
+addi $a1, $zero, 19          # set the Y coordinate
+jal draw_O               # calls appropriate letter drawing function
+
+addi $a0, $zero, 27          # set the X coordinate
+addi $a1, $zero, 19          # set the Y coordinate
+jal draw_R               # calls appropriate letter drawing function
+
+addi $a0, $zero, 23          # set the X coordinate
+addi $a1, $zero, 25          # set the Y coordinate
+jal draw_q               # calls appropriate letter drawing function
+
+game_over_screen_loop:
+lw $s2, keyboardaddress 
+lw $t8, 0($s2)              # load first word from keyboard
+
+beq $t8, 1, keyboard_game_over_input   # if first word 1 key is not pressed
+
+li $v0, 32
+li $a0, 16
+syscall
+
+j game_over_screen_loop
 
 draw_game_play:
 # erase any existing screen
@@ -190,11 +267,6 @@ lw $t2, 4($s5)
 addi $t2, $t2, 1
 sw $t2, 4($s5)
 
-lw $t2, 12($s5)
-li $v0, 1            # Service code 4 = Print String
-addi $a0, $t2, 0     # Load address of the string
-syscall               # Make the system call
-
 li $t2, 0        # make t2 the pixel we want to look at
 li $t9, 360
 check_collisions_loop:
@@ -216,7 +288,7 @@ check_top_row:
 addi $t2, $t2, 4
 beq $t2, $t3, draw_col_at_top
 lw $t9, 0($t2)
-bne $t9, $zero, respond_to_Q        # if the row is not black, then the game is lost
+bne $t9, $zero, game_over_screen        # if the row is not black, then the game is over, print that on screen and allow users option to replay
 j check_top_row
 
 draw_col_at_top:
@@ -257,7 +329,7 @@ j game_loop
 # Code for responding to keyboard input
 ##############################################################################
 keyboard_input:
-lw $a0, 4 ($s2) # Load second word from keyboard
+lw $a0, 4($s2) # Load second word from keyboard
 beq $a0, 0x71, respond_to_Q # check if the key q was pressed
 beq $a0, 0x61, respond_to_A # check if the key a was pressed
 beq $a0, 0x73, respond_to_S # check if the key s was pressed
@@ -1362,6 +1434,7 @@ vertical_line_loop_end:
 jr $ra                      # return statement (return to where you came from)
 
 
+
 ##############################################################################
 # FIRST MENU SECTION
 ##############################################################################
@@ -1369,10 +1442,11 @@ jr $ra                      # return statement (return to where you came from)
 # Code for responding to keyboard input in first menu
 ##############################################################################
 keyboard_choose_level_input:
-lw $a0, 4 ($s2) # Load second word from keyboard
+lw $a0, 4($s2) # Load second word from keyboard
 beq $a0, 0x31, respond_to_1 # check if the key 1 was pressed
 beq $a0, 0x32, respond_to_2 # check if the key 2 was pressed
 beq $a0, 0x33, respond_to_3 # check if the key 3 was pressed
+beq $a0, 0x71, respond_to_Q # check if the key q was pressed
 
 jr $ra
 
@@ -1405,7 +1479,52 @@ li $t0, 8     # make lowest speed ~6 times a minute
 sw $t0, 20($s5)        # change the initial move down
 j draw_game_play
 
-j draw_game_play
+
+
+##############################################################################
+# GAME_OVER MENU SECTION
+##############################################################################
+##############################################################################
+# Code for responding to keyboard input in first menu
+##############################################################################
+keyboard_game_over_input:
+lw $a0, 4($s2) # Load second word from keyboard
+beq $a0, 0x71, respond_to_Q # check if the key q was pressed
+beq $a0, 0x72, respond_to_r # check if the key r was pressed
+
+##############################################################################
+# Code for responding to key press r
+##############################################################################
+respond_to_r:
+# reset all the items in s3 to black
+la $s3, game_board          # $s3 = address for game_board
+
+li $t1, 0           # make index variable for loop
+li $t2, 360         # make final value for loop
+set_s3_to_black:
+beq $t1, $t2, reset_game_info
+add $t3, $s3, $t1       # get address of value in the array
+
+sw $zero, 0($t3)        # make the value 0
+
+addi $t1, $t1, 4
+j set_s3_to_black
+
+reset_game_info:
+# resetting s5 to game_info: .word 0, 0, 0, 64, 0, 24
+sw $zero, 0($s5)
+sw $zero, 4($s5)
+sw $zero, 8($s5)
+sw $zero, 16($s5)
+
+li $t0, 64
+sw $t0, 12($s5)
+
+li $t0, 24
+sw $t0, 20($s5)
+
+j select_mode       # go to the select mode screen
+
 
 
 
@@ -1413,7 +1532,6 @@ j draw_game_play
 ##############################################################################
 # ALPHABET SECTION
 ##############################################################################
-
 
 ##############################################################################
 # Code for drawing an E
@@ -1657,33 +1775,20 @@ draw_O:
 addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)              # push $ra onto the stack
 
-addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $a0, 0($sp)              # push $a0 onto the stack
-
-addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $a1, 0($sp)              # push $a1 onto the stack
-
-addi $a2, $zero, 3          # set the width of the rectangle
-addi $a3, $zero, 5          # set the height of the rectangle (15 + 2)
-jal rect_draw               # calls rectangle drawing function.
-
-lw $a1, 0($sp)              # pop $a1 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-lw $a0, 0($sp)              # pop $a0 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
-
-addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
-sw $t9, 0($sp)              # push $t9 onto the stack
-
-addi $a0, $a0, 1               # go down and to the left
-addi $a1, $a1, 1
-add $t9, $zero, $zero             # load t9 with black again
 li $a2, 3
-jal vertical_line_draw        # draw black line
+jal line_draw
 
-lw $t9, 0($sp)              # pop $t9 off the stack
-addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, 2        # move 2 right
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, -1        # move 1 left
+addi $a1, $a1, 4        # move 4 down
+li $a2, 1
+jal line_draw
 
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
@@ -1750,6 +1855,142 @@ jal line_draw
 
 addi $a0, $a0, 2        # move a0 two right
 addi $a1, $a1, -4        # move a0 two up
+li $a2, 5
+jal vertical_line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+
+##############################################################################
+# Code for drawing a G
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_G:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 4
+jal line_draw
+
+li $a2, 5
+jal vertical_line_draw
+
+addi $a1, $a1, 4        # move a0 four down
+li $a2, 4
+jal line_draw
+
+addi $a0, $a0, 3        # move 3 right
+addi $a1, $a1, -2        # move two up
+li $a2, 2
+jal vertical_line_draw
+
+addi $a0, $a0, -1         # move 1 right
+li $a2, 1
+jal line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing an A
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_A:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 3
+jal line_draw
+
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, 2        # move 2 right
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, -1        # move 1 left
+addi $a1, $a1, 2        # move 2 down
+li $a2, 1
+jal line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing an M
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_M:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, 2        # move 2 right
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, 2        # move 2 right
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, -1        # move 1 left
+li $a2, 1
+jal line_draw
+
+addi $a0, $a0, -2        # move 2 left
+li $a2, 1
+jal line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing a q
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_q:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+add $a1, $a1, 1         # go down 1
+li $a2, 1
+jal line_draw
+
+add $a0, $a0, 1         # go right one
+add $a1, $a1, -1        # go up 1
+li $a2, 1
+jal line_draw
+
+add $a1, $a1, 2        # go down 2
+li $a2, 1
+jal line_draw
+
+add $a0, $a0, 1         # go right one
+add $a1, $a1, -2        # go up 2
 li $a2, 5
 jal vertical_line_draw
 
