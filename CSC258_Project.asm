@@ -7,7 +7,7 @@ game_board: .space 360
 # timer for gravity speed increase, lowest possible gravity speed
 game_info: .word 0, 0, 0, 64, 0, 24
 curr_column_colours: .space 12
-next_five_columns: .space 60
+next_column: .space 12
 music_index: .word 0      # current note index
 music_timer: .word 0      # time since last note
 music_length: .word 46     # total notes (match your array)
@@ -161,6 +161,8 @@ jal rect_draw               # calls rectangle drawing function.
 # initialize the drawing of the column
 draw_col:
 jal rand_column
+jal draw_curr_column
+
 li $s4, 56           # $s4 = offset for the bottom of the column being moved on game_board
 
 # main loop for the game
@@ -482,22 +484,83 @@ sw $t3, 12($s5)      # update s5 to faster speed
 jr $ra
 
 ##############################################################################
+# Code for drawing the current column to the screen
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# next_column = colours of the column
+# $t2 = the current location in next column
+
+draw_curr_column:
+addi $sp, $sp, -4
+sw $ra, 0($sp)
+
+addi $t2, $s3, 8        # start position in game board
+addi $t4, $s3, 80       # end position
+li $t3, 0               # offset into next_column
+la $t6, next_column     # base address of next_column
+draw_curr_column_loop:
+beq $t4, $t2, draw_curr_column_loop_end
+add $t7, $t6, $t3       # address of next_column[i]
+lw $t5, 0($t7)          # load color
+sw $t5, 0($t2)          # draw to board
+addi $t2, $t2, 24       # move down one row
+addi $t3, $t3, 4        # next element in array
+j draw_curr_column_loop
+draw_curr_column_loop_end:
+jal rand_column         # generate the next random column
+jal draw_next_column    # draw the next random column to a side panel
+lw $ra, 0($sp)
+addi $sp, $sp, 4
+jr $ra
+
+##############################################################################
+# Code for drawing the next column to the screen
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# next_column = colours of the column
+# $t2 = the current location in next column
+
+draw_next_column:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra to the stack for nested function
+
+addi $t2, $s0, 120          # add the offset from game_board (for row 0, column 3 in the board) to $t2
+addi $t4, $s0, 385           # calculate the postion of the last pixel in the column 
+li $t3, 0                   # index in next_column
+# draw to the screen
+la $t6, next_column     # base address of next_column
+draw_next_column_loop:
+beq $t4, $t2, draw_next_column_loop_end # check if the current position is the end of the column, if so branch out of the loop
+add $t7, $t6, $t3       # address of next_column[i]
+lw $t5, 0($t7)          # load color
+sw $t5, 0($t2)          # draw to board
+addi $t2, $t2, 128           # Move to the next pixel location on the screen
+addi $t3, $t3, 4
+j draw_next_column_loop         # Jump to the start of the loop
+draw_next_column_loop_end:
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+jr $ra
+
+##############################################################################
 # Code for random color column
 ##############################################################################
 # $s0 = location of the top-left corner of the bitmap
 # $s1 = address of the first color
-# $t2 = the current location to draw the random color pixel
+# $t2 = the current location in next column
 
 rand_column:
 addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
 sw $ra, 0($sp)              # push $ra to the stack for nested function
-addi $t2, $s3, 8            # add the offset from game_board (for row 0, column 3 in the board) to $t2
-addi $t4, $s3, 80           # calculate the postion of the last pixel in the column 
+li $t2, 0
+li $t4, 12                  # total size (3 * 4)
+la $t3, next_column
 rand_column_loop:
-jal rand_color              # call rand_color to get a random color in $v0
 beq $t4, $t2, rand_column_loop_end # check if the current position is the end of the column, if so branch out of the loop
-sw $v0, 0($t2)              # draw pixel of color $v0 to location $t2
-addi $t2, $t2, 24           # Move to the next pixel in the column
+jal rand_color              # call rand_color to get a random color in $v0
+add $t5, $t3, $t2           # compute address
+sw $v0, 0($t5)  # draw pixel of color $v0 to location next_column
+addi $t2, $t2, 4       # Move to the next location in next_column
 j rand_column_loop          # Jump to the start of the loop
 rand_column_loop_end:
 lw $ra, 0($sp)              # pop $ra off the stack
