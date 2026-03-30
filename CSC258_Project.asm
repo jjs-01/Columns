@@ -3,9 +3,9 @@ ADDR_DSPL: .word 0x10008000
 colors: .word 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xf28c28, 0xff00ff, 0xffffff   # red, green, blue, yellow, orange, magenta, white
 keyboardaddress: .word 0xffff0000
 game_board: .space 360
-# timer to count when to drop down one more block, number of blocks placed placements, difficulty (0 = easy, 1 = medium, 3 = hard), gravity speed, 
-# timer for gravity speed increase
-game_info: .word 0, 0, 0, 64, 0
+# timer to count when to drop down one more block, number of blocks placed placements, difficulty (1 = easy, 2 = medium, 3 = hard), gravity speed, 
+# timer for gravity speed increase, lowest possible gravity speed
+game_info: .word 0, 0, 0, 64, 0, 24
 curr_column_colours: .space 12
 next_five_columns: .space 60
 
@@ -29,12 +29,106 @@ la $s5, game_info           # $s5 = info for the game (which fields represent wh
 la $s6, curr_column_colours # $s6 = current moving column colours
 
 select_mode:
+lw $t9, 24($s1)             # loads white from colors
+
+# FIRST WORD: SELECT
+addi $a0, $zero, 1          # set the X coordinate
+addi $a1, $zero, 1          # set the Y coordinate
+jal draw_S               # calls appropriate letter drawing function
+
+addi $a0, $zero, 5          # set the X coordinate
+addi $a1, $zero, 1          # set the Y coordinate
+jal draw_E               # calls appropriate letter drawing function
+
+addi $a0, $zero, 9          # set the X coordinate
+addi $a1, $zero, 1          # set the Y coordinate
+jal draw_L               # calls appropriate letter drawing function
+
+addi $a0, $zero, 13          # set the X coordinate
+addi $a1, $zero, 1          # set the Y coordinate
+jal draw_E               # calls appropriate letter drawing function
+
+addi $a0, $zero, 17          # set the X coordinate
+addi $a1, $zero, 1          # set the Y coordinate
+jal draw_C               # calls appropriate letter drawing function
+
+addi $a0, $zero, 21          # set the X coordinate
+addi $a1, $zero, 1          # set the Y coordinate
+jal draw_T               # calls appropriate letter drawing function
+
+# SECOND WORD: LEVEL
+
+addi $a0, $zero, 1          # set the X coordinate
+addi $a1, $zero, 7          # set the Y coordinate
+jal draw_L               # calls appropriate letter drawing function
+
+addi $a0, $zero, 5          # set the X coordinate
+addi $a1, $zero, 7          # set the Y coordinate
+jal draw_E               # calls appropriate letter drawing function
+
+addi $a0, $zero, 9          # set the X coordinate
+addi $a1, $zero, 7          # set the Y coordinate
+jal draw_V               # calls appropriate letter drawing function
+
+addi $a0, $zero, 13          # set the X coordinate
+addi $a1, $zero, 7          # set the Y coordinate
+jal draw_E               # calls appropriate letter drawing function
+
+addi $a0, $zero, 17          # set the X coordinate
+addi $a1, $zero, 7          # set the Y coordinate
+jal draw_L               # calls appropriate letter drawing function
+
+# NEXT SENTENCE: 1 OR 2 OR 3
+# draw 1:
+addi $a0, $zero, 5          # set the X coordinate
+addi $a1, $zero, 17          # set the Y coordinate
+li $a2, 5
+jal vertical_line_draw               # calls appropriate letter drawing function
+
+addi $a0, $zero, 9          # set the X coordinate
+addi $a1, $zero, 17          # set the Y coordinate
+jal draw_O               # calls appropriate letter drawing function
+
+addi $a0, $zero, 13          # set the X coordinate
+addi $a1, $zero, 17          # set the Y coordinate
+jal draw_R               # calls appropriate letter drawing function
+
+addi $a0, $zero, 19          # set the X coordinate
+addi $a1, $zero, 17          # set the Y coordinate
+jal draw_2               # calls appropriate letter drawing function
+
+addi $a0, $zero, 8          # set the X coordinate
+addi $a1, $zero, 23          # set the Y coordinate
+jal draw_O               # calls appropriate letter drawing function
+
+addi $a0, $zero, 12          # set the X coordinate
+addi $a1, $zero, 23          # set the Y coordinate
+jal draw_R               # calls appropriate letter drawing function
+
+addi $a0, $zero, 18          # set the X coordinate
+addi $a1, $zero, 23          # set the Y coordinate
+jal draw_3               # calls appropriate letter drawing function
+
+select_mode_loop:
+lw $s2, keyboardaddress 
+lw $t8, 0($s2)              # load first word from keyboard
+
+bne $t8, 1, select_mode_loop  # if first word 1 key is not pressed
+j keyboard_choose_level_input
 
 game_over_screen:
 
 paused_screen:
 
 draw_game_play:
+# erase any existing screen
+addi $a0, $zero, 0          # set the X coordinate
+addi $a1, $zero, 0          # set the Y coordinate
+addi $a2, $zero, 32          # set the width of the rectangle (6 + 2)
+addi $a3, $zero, 32         # set the height of the rectangle (15 + 2)
+add $t9, $zero $zero             # loads white from colors
+jal rect_draw               # calls rectangle drawing function.
+
 # initialize the drawing of white game area rectangle
 addi $a0, $zero, 1          # set the X coordinate
 addi $a1, $zero, 1          # set the Y coordinate
@@ -65,6 +159,10 @@ bne $t8, 1, redraw  # if first word 1 key is not pressed
 j keyboard_input
 
 collision_detection:
+li $v0, 32          # pauses to look more natural when deleting the next rows
+li $a0, 250
+syscall
+
 addi $a0, $s4, -48            # make the argument for $a0 point to top of column just placed
 jal three_in_row
 jal three_in_col
@@ -328,7 +426,7 @@ j redraw
 
 find_speed:
 lw $t2, 16($s5)
-li $t3, 2810
+li $t3, 1875
 divu $t2, $t3
 mfhi $t3        # store remainder of game_info[1] = counter of speed increase time / 15
 beq $t3, $zero, increase_speed_check        # if around 45 seconds have passed, increase speed
@@ -338,12 +436,13 @@ increase_speed_check:
 sw $zero, 16($s5)       # reset timer for speed
 
 lw $t2, 12($s5)
-addi $t4, $t2, -16
+lw $t5, 20($s5)
+sub $t4, $t2, $t5
 bgtz $t4, increase_speed        # speed is maximum 4 drops times a second
 jr $ra
 
 increase_speed:
-addi $t3, $t2, -12    # subtract 2 from speed
+addi $t3, $t2, -8    # subtract 2 from speed
 sw $t3, 12($s5)      # update s5 to faster speed
 
 jr $ra
@@ -1229,3 +1328,432 @@ addi $t3, $t3, 4            # Move to the next pixel in the row
 j line_loop                 # Jump to the start of the loop
 line_loop_end:
 jr $ra                      # return statement (return to where you came from)
+
+
+##############################################################################
+# Code for drawing a vertical line
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X coordinate of the start of the line
+# $a1 = the Y coordinate of the start of the line
+# $a2 = the length of the line
+# $t1 = the horizontal offset to add to $s0
+# $t2 = the vertical offset to add to $s0
+# $t3 = the current location of the pixel to draw
+# $t4 = the location of the last pixel in the line
+# $t9 = the colour of the line
+
+vertical_line_draw: 
+sll $t2, $a1, 7             # Calculate the vertical offset (from $s0), based on the Y input ($a1) (multiply Y input by 128)
+sll $t1, $a0, 2             # Calculate the horizontal offset (from $s0), based on the X intput ($a0) (multiply X input by 4)
+
+add $t3, $s0, $t2           # Add the vertical offset to $s0
+add $t3, $t3, $t1           # Add the horizontal offset to the location calcuated above
+
+sll $t5, $a2, 7             # Calculate the offset from $t3 for the last pixel in the line (multiple $a2 by 128)
+add $t4, $t3, $t5           # Calculate the postion of the last pixel in the line
+# Start of the line-drawing loop
+vertical_line_loop:
+beq $t3, $t4, vertical_line_loop_end # Check if the current X and Y match the end location of the line, branch out of the loop
+sw $t9, 0($t3)              # Draw a single pixel at the current X and Y
+addi $t3, $t3, 128            # Move to the next pixel in the column
+j vertical_line_loop                 # Jump to the start of the loop
+vertical_line_loop_end:
+jr $ra                      # return statement (return to where you came from)
+
+
+##############################################################################
+# FIRST MENU SECTION
+##############################################################################
+##############################################################################
+# Code for responding to keyboard input in first menu
+##############################################################################
+keyboard_choose_level_input:
+lw $a0, 4 ($s2) # Load second word from keyboard
+beq $a0, 0x31, respond_to_1 # check if the key 1 was pressed
+beq $a0, 0x32, respond_to_2 # check if the key 2 was pressed
+beq $a0, 0x33, respond_to_3 # check if the key 3 was pressed
+
+jr $ra
+
+##############################################################################
+# Code for responding to key press 1
+##############################################################################
+respond_to_1:
+# keep the default value for speed as defined at the start of the program (64)
+j draw_game_play
+
+##############################################################################
+# Code for responding to key press 2
+##############################################################################
+respond_to_2:
+li $t0, 48     # load move down every 48 frames to the timer
+sw $t0, 12($s5)        # change the initial move down
+
+li $t0, 16     # make lowest speed 4 times a minute
+sw $t0, 20($s5)        # change the initial move down
+j draw_game_play
+
+##############################################################################
+# Code for responding to key press 3
+##############################################################################
+respond_to_3:
+li $t0, 32     # load move down every 48 frames to the timer
+sw $t0, 12($s5)        # change the initial move down
+
+li $t0, 8     # make lowest speed ~6 times a minute
+sw $t0, 20($s5)        # change the initial move down
+j draw_game_play
+
+j draw_game_play
+
+
+
+
+##############################################################################
+# ALPHABET SECTION
+##############################################################################
+
+
+##############################################################################
+# Code for drawing an E
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_E:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, 1        # move a0 one right
+
+li $a2, 2
+jal line_draw
+
+addi $a1, $a1, 2        # move a1 two down
+
+li $a2, 2
+jal line_draw
+
+addi $a1, $a1, 2        # move a1 two down
+
+li $a2, 2
+jal line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing an L
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_L:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, 1        # move a0 one right
+addi $a1, $a1, 4        # move a1 four down
+
+li $a2, 2
+jal line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing an S
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_S:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 3
+jal vertical_line_draw
+
+addi $a0, $a0, 1        # move a0 one right
+
+li $a2, 2
+jal line_draw
+
+addi $a1, $a1, 2        # move a1 two down
+
+li $a2, 2
+jal line_draw
+
+addi $a0, $a0, 1        # move a0 one right again
+
+li $a2, 3
+jal vertical_line_draw
+
+addi $a0, $a0, -2        # move a0 two left
+addi $a1, $a1, 2        # move a1 two down
+
+li $a2, 2
+jal line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+
+##############################################################################
+# Code for drawing a C
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_C:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 5
+jal vertical_line_draw
+
+addi $a0, $a0, 1        # move a0 one right
+
+li $a2, 2
+jal line_draw
+
+addi $a0, $a0, 1        # move a0 one right
+
+li $a2, 2
+jal vertical_line_draw
+
+addi $a0, $a0, -1        # move a0 one left
+addi $a1, $a1, 4        # move a1 four down
+
+li $a2, 2
+jal line_draw
+
+addi $a0, $a0, 1        # move a0 one right again
+addi $a1, $a1, -1        # move a1 up one
+
+li $a2, 2
+jal vertical_line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+
+##############################################################################
+# Code for drawing a T
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_T:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 3
+jal line_draw
+
+addi $a0, $a0, 1        # move a0 one right
+
+li $a2, 5
+jal vertical_line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing a V
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_V:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 4
+jal vertical_line_draw
+
+addi $a0, $a0, 2        # move a0 two right
+
+li $a2, 4
+jal vertical_line_draw
+
+addi $a0, $a0, -1        # move a0 one left
+addi $a1, $a1, 4        # move a0 down 4
+
+li $a2, 1
+jal line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing an R
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_R:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 5
+jal vertical_line_draw
+
+li $a2, 2
+jal line_draw
+
+addi $a1, $a1, 2        # move a0 two down
+li $a2, 2
+jal line_draw
+
+addi $a1, $a1, -1        # move a0 one up
+addi $a0, $a0, 2        # move a0 two left
+li $a2, 1
+jal line_draw
+
+addi $a1, $a1, 2        # move a0 two down
+li $a2, 2
+jal vertical_line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing an O
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_O:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $a0, 0($sp)              # push $a0 onto the stack
+
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $a1, 0($sp)              # push $a1 onto the stack
+
+addi $a2, $zero, 3          # set the width of the rectangle
+addi $a3, $zero, 5          # set the height of the rectangle (15 + 2)
+jal rect_draw               # calls rectangle drawing function.
+
+lw $a1, 0($sp)              # pop $a1 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+lw $a0, 0($sp)              # pop $a0 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $t9, 0($sp)              # push $t9 onto the stack
+
+addi $a0, $a0, 1               # go down and to the left
+addi $a1, $a1, 1
+add $t9, $zero, $zero             # load t9 with black again
+li $a2, 3
+jal vertical_line_draw        # draw black line
+
+lw $t9, 0($sp)              # pop $t9 off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing a 2
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_2:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 3
+jal line_draw
+
+addi $a1, $a1, 2        # move a0 two down
+li $a2, 3
+jal line_draw
+
+addi $a1, $a1, 2        # move a0 two down
+li $a2, 3
+jal line_draw
+
+addi $a1, $a1, -2        # move a0 two up
+li $a2, 3
+jal vertical_line_draw
+
+addi $a0, $a0, 2        # move a0 two right
+addi $a1, $a1, -2        # move a1 two up
+li $a2, 3
+jal vertical_line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
+
+##############################################################################
+# Code for drawing a 3
+##############################################################################
+# $s0 = location of the top-left corner of the bitmap
+# $a0 = the X co-ord of the start of the letter
+# $a1 = the Y co-ord of the start of the letter
+
+draw_3:
+addi $sp, $sp, -4           # move to an empty spot on the stack (decrement the stack pointer $sp by 4)
+sw $ra, 0($sp)              # push $ra onto the stack
+
+li $a2, 3
+jal line_draw
+
+addi $a1, $a1, 2        # move a0 two down
+li $a2, 3
+jal line_draw
+
+addi $a1, $a1, 2        # move a0 two down
+li $a2, 3
+jal line_draw
+
+addi $a0, $a0, 2        # move a0 two right
+addi $a1, $a1, -4        # move a0 two up
+li $a2, 5
+jal vertical_line_draw
+
+lw $ra, 0($sp)              # pop $ra off the stack
+addi $sp, $sp, 4            # move stack pointer back to the top of the stack
+
+jr $ra
