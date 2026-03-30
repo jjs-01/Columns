@@ -8,7 +8,11 @@ game_board: .space 360
 game_info: .word 0, 0, 0, 64, 0, 24
 curr_column_colours: .space 12
 next_five_columns: .space 60
-
+music_index: .word 0      # current note index
+music_timer: .word 0      # time since last note
+music_length: .word 46     # total notes (match your array)
+notes: .half 76, 71, 72, 74, 72, 71, 69, 69, 72, 76, 74, 72, 71, 71, 76, 79, 77, 76, 74, 74, 72, 76, 74, 72, 71, 71, 74, 77, 76, 74, 72, 72, 76, 71, 72, 74, 72, 71, 69, 69, 72, 76, 74, 72, 71, 71
+durs: .half 500, 500, 500, 500, 500, 500, 1000, 1000, 500, 500, 500, 500, 1000, 1000, 500, 500, 500, 500, 1000, 1000, 500, 500, 500, 500, 1000, 1000, 500, 500, 500, 500, 1000, 1000, 500, 500, 500, 500, 500, 500, 1000, 1000, 500, 500, 500, 500, 1000, 
 
 ##############################################################################
 # Julia Sinclair 1011047564 and Mei Walters 1011183167
@@ -161,6 +165,7 @@ li $s4, 56           # $s4 = offset for the bottom of the column being moved on 
 
 # main loop for the game
 game_loop:
+
 lw $s2, keyboardaddress 
 lw $t8, 0($s2)              # load first word from keyboard
 
@@ -255,11 +260,12 @@ jal gravity_to_column               # adds to gravity
 refresh_board:
 jal redraw_game_board
 
+jal play_music
+
 sleep:
 li $v0, 32
 li $a0, 16
 syscall
-
 j game_loop
 
 ##############################################################################
@@ -1950,4 +1956,44 @@ jal vertical_line_draw
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
 
+jr $ra
+
+##############################################################################
+# Code for playing background music
+##############################################################################
+play_music:
+# load timer
+lw $t0, music_timer
+addi $t0, $t0, 16          # +16 ms per frame
+sw $t0, music_timer
+
+# get current note index
+lw $t1, music_index
+sll $t2, $t1, 1            # offset = index * 2
+
+
+li $t3, 250
+blt $t0, $t3, music_done   # not enough time passed yet
+
+# reset timer
+sw $zero, music_timer
+
+# load note
+lh $t4, notes($t2)
+# load duration
+lh $t3, durs($t2)
+
+newnote($t4, $t3)
+
+# advance index
+addi $t1, $t1, 1
+lw $t5, music_length
+bne $t1, $t5, store_index
+
+li $t1, 0          # loop music
+
+store_index:
+sw $t1, music_index
+
+music_done:
 jr $ra
