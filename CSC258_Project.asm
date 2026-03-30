@@ -187,7 +187,7 @@ addi $a1, $zero, 25          # set the Y coordinate
 jal draw_R               # calls appropriate letter drawing function
 
 # R OR q (down the side)
-addi $a0, $zero, 23          # set the X coordinate
+addi $a0, $zero, 25          # set the X coordinate
 addi $a1, $zero, 13          # set the Y coordinate
 jal draw_R               # calls appropriate letter drawing function
 
@@ -199,7 +199,7 @@ addi $a0, $zero, 27          # set the X coordinate
 addi $a1, $zero, 19          # set the Y coordinate
 jal draw_R               # calls appropriate letter drawing function
 
-addi $a0, $zero, 23          # set the X coordinate
+addi $a0, $zero, 25          # set the X coordinate
 addi $a1, $zero, 25          # set the Y coordinate
 jal draw_q               # calls appropriate letter drawing function
 
