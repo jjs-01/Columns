@@ -3,6 +3,8 @@ ADDR_DSPL: .word 0x10008000
 colors: .word 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xf28c28, 0xff00ff, 0xffffff   # red, green, blue, yellow, orange, magenta, white
 keyboardaddress: .word 0xffff0000
 game_board: .space 360
+# time count to count every game_loop up to a certain gravity time, number of blocks placed placements, difficulty (0 = easy, 1 = medium, 3 = hard)
+game_info: .word 0, 0, 0
 
 
 ##############################################################################
@@ -20,6 +22,7 @@ lw $s0, ADDR_DSPL           # $s0 = base address for display
 la $s1, colors              # $s1 = address for the first color
 lw $s2, keyboardaddress     # $s2 = address for the keyboard
 la $s3, game_board          # $s3 = address for game_board
+la $s5, game_info           # $s5 = info for the game (which fields represent which above)
 
 # initialize the drawing of white game area rectangle
 addi $a0, $zero, 1          # set the X coordinate
@@ -42,9 +45,6 @@ draw_col:
 jal rand_column
 li $s4, 56           # $s4 = offset for the bottom of the column being moved on game_board
 
-# s4 = current score
-# s5 = number of frames
-li $s5, 0
 game_loop:
 lw $s2, keyboardaddress 
 lw $t8, 0($s2)              # load first word from keyboard
@@ -73,7 +73,7 @@ j final_state               # if it reaches here, all of the collisions should b
 check_collisions:
 jal redraw_game_board
 li $v0, 32          # pauses to look more natural when deleting the next rows
-li $a0, 100
+li $a0, 250
 syscall
 
 li $t2, 0        # make t2 the pixel we want to look at
@@ -103,18 +103,19 @@ j check_top_row
 draw_col_at_top:
 jal rand_column
 li $s4, 56
-li $s5, 0
+sw $zero, 0($s5)        # resets clock tick 
 
 redraw:
 # checks whether to add gravity
-addi $s5, $s5, 1
+lw $t1, 0($s5)
+addi $t1, $t1, 1
+sw $t1, 0($s5)        # save incremented value
 li $t2, 64
-divu $s5, $t2
+divu $t1, $t2
 mfhi $t6
 bne $t6, $zero, refresh_board
-li $s5, 0
+sw $zero, 0($s5)        # resets clock tick 
 jal gravity_to_column
-addi $s4, $s4, 24
 
 refresh_board:
 jal redraw_game_board
@@ -185,10 +186,8 @@ add $t6, $s3, $s4           # t6 is the address of bottom of col
 addi $t6, $t6, 24           # value one row below t6
 lw $t6, 0($t6)              # load colour at t6 into t6
 
-addi $t8, $s4, 0
-
 MOVE_COL_DOWN_ENTIRELY:
-addi $t0, $s4, -356         # trying to determine if the value is at the final column
+addi $t0, $s4, -332         # trying to determine if the value is at the final column
 bgtz $t0, END_S
 bne $t6, $zero, END_S       # move until the next colour is not black (i.e. edge or another placed column)
 
@@ -242,7 +241,7 @@ addi $a0, $zero, 4          # set the amount to move the column by (4 right)
 addi $a1, $s4, 0
 jal redraw_column
 
-addi $s4, $s4, 4          # increment to right
+addi $s4, $s4, 4          # increment right
 
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
@@ -352,6 +351,8 @@ sw $ra, 0($sp)          # store return
 addi $a0, $zero, 24         # set the amount to move the column by (down 1 row)
 addi $a1, $s4, 0
 jal redraw_column
+
+addi $s4, $s4, 24           # move s4 down
 
 lw $ra, 0($sp)              # pop $ra off the stack
 addi $sp, $sp, 4            # move stack pointer back to the top of the stack
