@@ -146,6 +146,10 @@ j select_mode_loop
 
 
 game_over_screen:
+li $t1, 30
+li $t2, 2000
+newnote($t1, $t2)           # Play losing note
+
 lw $t9, 24($s1)             # loads white from colors
 
 # FIRST WORD: GAME
@@ -362,10 +366,6 @@ jr $ra
 # Code for responding to key press Q
 ##############################################################################
 respond_to_Q:
-li $t1, 30
-li $t2, 2000
-newnote($t1, $t2)           # Play Note
-
 li $v0, 10                  # terminate the program gracefully
 syscall
 
